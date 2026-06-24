@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";

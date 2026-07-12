@@ -13,6 +13,7 @@ import { Route as SuspendedRouteImport } from './routes/suspended'
 import { Route as PendingRouteImport } from './routes/pending'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as GuideRouteImport } from './routes/guide'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppWorklogRouteImport } from './routes/_app/worklog'
@@ -56,6 +57,11 @@ const MaintenanceRoute = MaintenanceRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuideRoute = GuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -180,6 +186,7 @@ const AppAdminAnnouncementsRoute = AppAdminAnnouncementsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
   '/maintenance': typeof MaintenanceRoute
   '/pending': typeof PendingRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
   '/maintenance': typeof MaintenanceRoute
   '/pending': typeof PendingRoute
@@ -240,6 +248,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
   '/maintenance': typeof MaintenanceRoute
   '/pending': typeof PendingRoute
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/guide'
     | '/login'
     | '/maintenance'
     | '/pending'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/guide'
     | '/login'
     | '/maintenance'
     | '/pending'
@@ -330,6 +341,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/guide'
     | '/login'
     | '/maintenance'
     | '/pending'
@@ -361,6 +373,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  GuideRoute: typeof GuideRoute
   LoginRoute: typeof LoginRoute
   MaintenanceRoute: typeof MaintenanceRoute
   PendingRoute: typeof PendingRoute
@@ -395,6 +408,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guide': {
+      id: '/guide'
+      path: '/guide'
+      fullPath: '/guide'
+      preLoaderRoute: typeof GuideRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -633,6 +653,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  GuideRoute: GuideRoute,
   LoginRoute: LoginRoute,
   MaintenanceRoute: MaintenanceRoute,
   PendingRoute: PendingRoute,

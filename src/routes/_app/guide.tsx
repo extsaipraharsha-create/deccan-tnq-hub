@@ -522,4 +522,4 @@ function GuidePage() {
   );
 }
 
-export const Route = createFileRoute("/guide")({ component: GuidePage });
+export const Route = createFileRoute("/_app/guide")({ component: GuidePage });

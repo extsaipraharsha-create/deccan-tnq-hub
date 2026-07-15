@@ -48,7 +48,7 @@ function AnnouncementsPage() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Write a short announcement. Leave blank to clear."
-              className="min-h-[140px]"
+              className="min-h-35"
             />
             <div className="mt-3 flex items-center justify-between">
               <div className="text-xs text-muted-foreground">

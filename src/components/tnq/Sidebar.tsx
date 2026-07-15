@@ -1,5 +1,7 @@
+/* eslint-disable prettier/prettier */
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
+import type React from "react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -27,7 +29,9 @@ import { useAuth } from "@/lib/tnq/auth-context";
 import { ROLE_LABEL, ROLE_ACCENT } from "@/lib/tnq/constants";
 import type { AppRole } from "@/lib/tnq/types";
 
-type NavItem = { label: string; to: string; icon: any };
+type IconType = React.ComponentType<{ className?: string }>;
+
+type NavItem = { label: string; to: string; icon: IconType };
 type NavSection = { label: string; items: NavItem[]; admin?: boolean };
 
 const NAV: Record<AppRole, NavSection[]> = {
@@ -52,6 +56,7 @@ const NAV: Record<AppRole, NavSection[]> = {
       label: "CONTENT",
       items: [
         { label: "Resources", to: "/resources", icon: Library },
+        { label: "📖 User Guide", to: "/guide", icon: BookOpen },
         { label: "Newcomers", to: "/newcomers", icon: GraduationCap },
       ],
     },
@@ -85,6 +90,7 @@ const NAV: Record<AppRole, NavSection[]> = {
       items: [
         { label: "Workspace", to: "/learning", icon: BookOpen },
         { label: "Resources", to: "/resources", icon: Library },
+        { label: "📖 User Guide", to: "/guide", icon: BookOpen },
       ],
     },
   ],
@@ -107,7 +113,13 @@ const NAV: Record<AppRole, NavSection[]> = {
         { label: "Contributor Management", to: "/contributors", icon: Users },
       ],
     },
-    { label: "CONTENT", items: [{ label: "Resources", to: "/resources", icon: Library }] },
+    {
+      label: "CONTENT",
+      items: [
+        { label: "Resources", to: "/resources", icon: Library },
+        { label: "📖 User Guide", to: "/guide", icon: BookOpen },
+      ],
+    },
     {
       label: "ADMIN CONSOLE",
       admin: true,
@@ -136,7 +148,7 @@ export function Sidebar() {
   const [adminOpen, setAdminOpen] = useState(pathname.startsWith("/admin"));
 
   return (
-    <aside className="w-[260px] shrink-0 flex flex-col bg-surface border-r border-border h-screen sticky top-0">
+    <aside className="w-65 shrink-0 flex flex-col bg-surface border-r border-border h-screen sticky top-0">
       <div className="px-5 py-5 flex items-center gap-3">
         <div className="h-10 w-10 rounded-xl bg-foreground flex items-center justify-center">
           <Diamond className="h-5 w-5 text-primary" strokeWidth={2.2} />

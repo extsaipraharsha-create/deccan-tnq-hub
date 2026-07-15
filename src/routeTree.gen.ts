@@ -13,7 +13,6 @@ import { Route as SuspendedRouteImport } from './routes/suspended'
 import { Route as PendingRouteImport } from './routes/pending'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as GuideRouteImport } from './routes/guide'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppWorklogRouteImport } from './routes/_app/worklog'
@@ -29,6 +28,7 @@ import { Route as AppMyProgressRouteImport } from './routes/_app/my-progress'
 import { Route as AppMyPlaygroundRouteImport } from './routes/_app/my-playground'
 import { Route as AppMyLearningRouteImport } from './routes/_app/my-learning'
 import { Route as AppLearningRouteImport } from './routes/_app/learning'
+import { Route as AppGuideRouteImport } from './routes/_app/guide'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppContributorsRouteImport } from './routes/_app/contributors'
 import { Route as AppProjectsIdRouteImport } from './routes/_app/projects.$id'
@@ -57,11 +57,6 @@ const MaintenanceRoute = MaintenanceRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GuideRoute = GuideRouteImport.update({
-  id: '/guide',
-  path: '/guide',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -138,6 +133,11 @@ const AppLearningRoute = AppLearningRouteImport.update({
   path: '/learning',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGuideRoute = AppGuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -186,13 +186,13 @@ const AppAdminAnnouncementsRoute = AppAdminAnnouncementsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
   '/maintenance': typeof MaintenanceRoute
   '/pending': typeof PendingRoute
   '/suspended': typeof SuspendedRoute
   '/contributors': typeof AppContributorsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/guide': typeof AppGuideRoute
   '/learning': typeof AppLearningRoute
   '/my-learning': typeof AppMyLearningRoute
   '/my-playground': typeof AppMyPlaygroundRoute
@@ -216,13 +216,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
   '/maintenance': typeof MaintenanceRoute
   '/pending': typeof PendingRoute
   '/suspended': typeof SuspendedRoute
   '/contributors': typeof AppContributorsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/guide': typeof AppGuideRoute
   '/learning': typeof AppLearningRoute
   '/my-learning': typeof AppMyLearningRoute
   '/my-playground': typeof AppMyPlaygroundRoute
@@ -248,13 +248,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
-  '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
   '/maintenance': typeof MaintenanceRoute
   '/pending': typeof PendingRoute
   '/suspended': typeof SuspendedRoute
   '/_app/contributors': typeof AppContributorsRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/guide': typeof AppGuideRoute
   '/_app/learning': typeof AppLearningRoute
   '/_app/my-learning': typeof AppMyLearningRoute
   '/_app/my-playground': typeof AppMyPlaygroundRoute
@@ -280,13 +280,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/guide'
     | '/login'
     | '/maintenance'
     | '/pending'
     | '/suspended'
     | '/contributors'
     | '/dashboard'
+    | '/guide'
     | '/learning'
     | '/my-learning'
     | '/my-playground'
@@ -310,13 +310,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/guide'
     | '/login'
     | '/maintenance'
     | '/pending'
     | '/suspended'
     | '/contributors'
     | '/dashboard'
+    | '/guide'
     | '/learning'
     | '/my-learning'
     | '/my-playground'
@@ -341,13 +341,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
-    | '/guide'
     | '/login'
     | '/maintenance'
     | '/pending'
     | '/suspended'
     | '/_app/contributors'
     | '/_app/dashboard'
+    | '/_app/guide'
     | '/_app/learning'
     | '/_app/my-learning'
     | '/_app/my-playground'
@@ -373,7 +373,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
-  GuideRoute: typeof GuideRoute
   LoginRoute: typeof LoginRoute
   MaintenanceRoute: typeof MaintenanceRoute
   PendingRoute: typeof PendingRoute
@@ -408,13 +407,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/guide': {
-      id: '/guide'
-      path: '/guide'
-      fullPath: '/guide'
-      preLoaderRoute: typeof GuideRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -522,6 +514,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLearningRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/guide': {
+      id: '/_app/guide'
+      path: '/guide'
+      fullPath: '/guide'
+      preLoaderRoute: typeof AppGuideRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -603,6 +602,7 @@ const AppProjectsRouteWithChildren = AppProjectsRoute._addFileChildren(
 interface AppRouteChildren {
   AppContributorsRoute: typeof AppContributorsRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppGuideRoute: typeof AppGuideRoute
   AppLearningRoute: typeof AppLearningRoute
   AppMyLearningRoute: typeof AppMyLearningRoute
   AppMyPlaygroundRoute: typeof AppMyPlaygroundRoute
@@ -627,6 +627,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppContributorsRoute: AppContributorsRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppGuideRoute: AppGuideRoute,
   AppLearningRoute: AppLearningRoute,
   AppMyLearningRoute: AppMyLearningRoute,
   AppMyPlaygroundRoute: AppMyPlaygroundRoute,
@@ -653,7 +654,6 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
-  GuideRoute: GuideRoute,
   LoginRoute: LoginRoute,
   MaintenanceRoute: MaintenanceRoute,
   PendingRoute: PendingRoute,

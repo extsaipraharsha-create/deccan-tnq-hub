@@ -227,6 +227,7 @@ export function Sidebar() {
         )}
       </nav>
 
+
       <div className="border-t border-border p-3 flex items-center gap-3">
         <div
           className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
@@ -246,6 +247,17 @@ export function Sidebar() {
           <LogOut className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Tour control */}
+      <div className="px-3 pb-4">
+        <button
+          onClick={() => window.dispatchEvent(new Event("tnq:tour_start"))}
+          className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 font-mono text-[11px] font-bold tracking-[0.16em] text-foreground uppercase"
+        >
+          🗺️ Start Tour
+        </button>
+      </div>
     </aside>
   );
 }
+

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -9,6 +10,7 @@ import {
   ClipboardCheck,
   Activity,
   Trophy,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -293,7 +295,17 @@ function ContributorDash({ dose }: { dose: string }) {
 /* ---------------- SME ---------------- */
 function SmeDash({ dose }: { dose: string }) {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ projects: 0, contributors: 0, openIssues: 0, avgScore: 0 });
+  const [stats, setStats] = useState<{
+    projects: number;
+    contributors: number;
+    activeContributors: number;
+    openIssuesThisWeek: number;
+  }>({
+    projects: 0,
+    contributors: 0,
+    activeContributors: 0,
+    openIssuesThisWeek: 0,
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -306,23 +318,33 @@ function SmeDash({ dose }: { dose: string }) {
         supabase.from("contributors").select("id").eq("sme_id", user.id),
       ]);
       const ids = (contribs ?? []).map((c) => c.id);
-      let openIssues = 0,
-        avg = 0;
-      if (ids.length) {
-        const { count: ic } = await supabase
-          .from("quality_issues")
-          .select("id", { count: "exact", head: true })
-          .in("contributor_id", ids)
-          .eq("status", "open");
-        openIssues = ic ?? 0;
-        const { data: sc } = await supabase
-          .from("quality_scores")
-          .select("score")
-          .in("contributor_id", ids);
-        if (sc?.length)
-          avg = Math.round((sc.reduce((a, b) => a + Number(b.score), 0) / sc.length) * 10) / 10;
-      }
-      setStats({ projects: projCount ?? 0, contributors: ids.length, openIssues, avgScore: avg });
+      // (Removed Avg quality / Onboarding % stat cards per request)
+      // Remaining SME stats are computed below for:
+      // - Active Contributors
+      // - Open Issues This Week
+      void ids;
+      // Active Contributors + Open Issues This Week stats
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+
+      const { count: activeCount } = await supabase
+        .from("contributors")
+        .select("id", { count: "exact", head: true })
+        .neq("onboarding_status", "not_started");
+
+      const { count: openWeekCount } = await supabase
+        .from("quality_issues")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open")
+        .gte("created_at", sevenDaysAgoISO);
+
+      setStats({
+        projects: projCount ?? 0,
+        contributors: ids.length,
+        activeContributors: activeCount ?? 0,
+        openIssuesThisWeek: openWeekCount ?? 0,
+      });
     })();
   }, [user]);
 
@@ -332,19 +354,18 @@ function SmeDash({ dose }: { dose: string }) {
         items={[
           { label: "Backend connected", tone: "ok" },
           { label: `${stats.contributors} contributors`, tone: "ok" },
-          { label: `${stats.openIssues} open issues`, tone: stats.openIssues > 0 ? "warn" : "ok" },
+          {
+            label: `${stats.openIssuesThisWeek} open issues (7d)`,
+            tone: stats.openIssuesThisWeek > 0 ? "warn" : "ok",
+          },
         ]}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="My projects" value={stats.projects} suffix="active" />
+        <StatCard label="Active Contributors" value={stats.activeContributors} />
+        <StatCard label="Open Issues This Week" value={stats.openIssuesThisWeek} />
         <StatCard label="Contributors" value={stats.contributors} suffix="assigned" />
-        <StatCard
-          label="Open issues"
-          value={stats.openIssues}
-          suffix={stats.openIssues === 1 ? "ticket" : "tickets"}
-        />
-        <StatCard label="Avg quality" value={stats.avgScore || "0.0"} suffix="/100" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

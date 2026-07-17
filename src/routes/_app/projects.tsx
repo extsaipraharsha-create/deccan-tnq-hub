@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable prettier/prettier */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +19,7 @@ import { FolderKanban, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 type Project = {
+  auditing_status: string;
   id: string;
   name: string;
   given_name: string | null;
@@ -32,9 +35,8 @@ type Project = {
   tasking_live?: boolean;
   last_updated?: string | null;
   last_updated_by?: string | null;
-  links?: string | null;
-  auditing_status?: "live" | "not_live" | null;
-};
+      links?: string | null;
+}
 
 type SmeOption = {
   id: string;
@@ -307,7 +309,7 @@ function ProjectsPage() {
           />
         </Card>
       ) : (
-        <Card className="!p-0 overflow-hidden">
+        <Card className="p-0! overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
@@ -357,7 +359,7 @@ function ProjectsPage() {
                         {p.auditing_status === "live" ? "Live" : "Not Live"}
                       </Badge>
                     </td>
-                    <td className="px-3 py-3 max-w-[220px]">
+                    <td className="px-3 py-3 max-w-55">
                       {p.links ? (
                         <a
                           href={p.links}

@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppShell } from "@/components/tnq/AppShell";
+import { GuidedTour } from "@/components/tnq/GuidedTour";
 import { useAuth } from "@/lib/tnq/auth-context";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
@@ -36,6 +37,7 @@ function AppLayout() {
   return (
     <AppShell>
       <Outlet />
+      <GuidedTour enabled={!!session && !!role && role !== "pending"} />
     </AppShell>
   );
 }

@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +58,12 @@ type ProjectLink = {
   updated_at: string;
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
+type CoOwner = {
+  id: string;
+  project_id: string;
+  user_id: string;
+  working_on: string | null;
+};
 
 const STATUS_TONE: Record<string, "success" | "warn" | "default"> = {
   active: "success",
@@ -137,6 +146,10 @@ function ProjectDetail() {
   const [contribs, setContribs] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
+  const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
+  const [addCoOwner, setAddCoOwner] = useState<{ userId: string; workingOn: string } | null>(
+    null,
+  );
 
   const canWrite =
     role === "super_admin" || role === "tnq_team" || project?.sme_owner_id === user?.id;
@@ -153,6 +166,10 @@ function ProjectDetail() {
     setLinks((l as any) ?? []);
     const { data: pr } = await supabase.from("profiles").select("id,name,email,photo_url");
     setProfiles((pr as any) ?? []);
+    const { data: co } = await (supabase.from("project_co_owners" as any) as any)
+      .select("*")
+      .eq("project_id", id);
+    setCoOwners((co as any) ?? []);
     const { data: c } = await (supabase.from("contributors") as any)
       .select("*")
       .contains("projects", [id]);
@@ -244,6 +261,38 @@ function ProjectDetail() {
   async function removeLink(l: ProjectLink) {
     if (!confirm("Delete this link?")) return;
     const { error } = await (supabase.from("project_links" as any) as any).delete().eq("id", l.id);
+    if (error) return toast.error(error.message);
+    toast.success("Removed");
+    load();
+  }
+
+  async function saveCoOwner() {
+    if (!addCoOwner?.userId) {
+      toast.error("Select a person");
+      return;
+    }
+    const { error } = await (supabase.from("project_co_owners" as any) as any).insert({
+      project_id: id,
+      user_id: addCoOwner.userId,
+      working_on: addCoOwner.workingOn.trim() || null,
+    });
+    if (error) return toast.error(error.message);
+    await supabase.from("activity_log").insert({
+      user_id: user?.id ?? "",
+      action: "co_owner_added",
+      action_type: "project_update",
+      target: id,
+    } as any);
+    toast.success("Co-owner added");
+    setAddCoOwner(null);
+    load();
+  }
+
+  async function removeCoOwner(co: CoOwner) {
+    if (!confirm("Remove this co-owner?")) return;
+    const { error } = await (supabase.from("project_co_owners" as any) as any)
+      .delete()
+      .eq("id", co.id);
     if (error) return toast.error(error.message);
     toast.success("Removed");
     load();
@@ -372,13 +421,13 @@ function ProjectDetail() {
               {project.version ?? "—"}
             </span>
           </div>
-          <div className="min-w-[200px]">
+          <div className="min-w-50">
             <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase mb-1.5">
               Current Owners
             </div>
             <OwnerList ids={currentOwners} profiles={profiles} />
           </div>
-          <div className="min-w-[200px]">
+          <div className="min-w-50">
             <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase mb-1.5">
               Previous Owners
             </div>
@@ -430,6 +479,56 @@ function ProjectDetail() {
               <span className="text-sm text-muted-foreground">Unassigned</span>
             )}
           </Card>
+
+          <Card className="lg:col-span-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                Co-Owners
+              </div>
+              {canWrite && (
+                <Button size="sm" variant="secondary" onClick={() => setAddCoOwner({ userId: "", workingOn: "" })}>
+                  <Plus className="h-3.5 w-3.5" /> Add Co-Owner
+                </Button>
+              )}
+            </div>
+            {coOwners.length === 0 ? (
+              <span className="text-sm text-muted-foreground">— None</span>
+            ) : (
+              <div className="space-y-2">
+                {coOwners.map((co) => {
+                  const p = profiles.find((x) => x.id === co.user_id);
+                  return (
+                    <div
+                      key={co.id}
+                      className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar p={p} size={28} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-foreground truncate">
+                            {p?.name ?? p?.email ?? "Unknown"}
+                          </div>
+                          {co.working_on && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {co.working_on}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {canWrite && (
+                        <button
+                          onClick={() => removeCoOwner(co)}
+                          className="text-muted-foreground hover:text-foreground shrink-0"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
@@ -454,7 +553,7 @@ function ProjectDetail() {
                           href={existing.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-muted-foreground hover:text-primary truncate block max-w-[260px]"
+                          className="text-xs text-muted-foreground hover:text-primary truncate block max-w-65"
                         >
                           {existing.url}
                         </a>
@@ -521,7 +620,7 @@ function ProjectDetail() {
                         href={l.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground hover:text-primary truncate block max-w-[260px]"
+                        className="text-xs text-muted-foreground hover:text-primary truncate block max-w-65"
                       >
                         {l.url}
                       </a>
@@ -573,7 +672,7 @@ function ProjectDetail() {
       )}
 
       {tab === "contributors" && (
-        <Card className="!p-0 overflow-hidden">
+        <Card className="p-0! overflow-hidden">
           {contribs.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
               No contributors on this project.
@@ -622,7 +721,7 @@ function ProjectDetail() {
               <EmptyState title="No quality issues" />
             </Card>
           ) : (
-            <Card className="!p-0 overflow-hidden">
+            <Card className="p-0! overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b border-border">
                   <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
@@ -651,7 +750,7 @@ function ProjectDetail() {
       )}
 
       {tab === "activity" && (
-        <Card className="!p-0 overflow-hidden">
+        <Card className="p-0! overflow-hidden">
           {activity.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">No activity logged.</div>
           ) : (
@@ -735,6 +834,47 @@ function ProjectDetail() {
                 value={editLink.url}
                 onChange={(e) => setEditLink({ ...editLink, url: e.target.value })}
                 placeholder="https://…"
+              />
+            </Field>
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!addCoOwner}
+        onClose={() => setAddCoOwner(null)}
+        title="Add co-owner"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAddCoOwner(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveCoOwner}>Save</Button>
+          </>
+        }
+      >
+        {addCoOwner && (
+          <>
+            <Field label="Person">
+              <Select
+                value={addCoOwner.userId}
+                onChange={(e) => setAddCoOwner({ ...addCoOwner, userId: e.target.value })}
+              >
+                <option value="">Select…</option>
+                {profiles
+                  .filter((p) => !coOwners.some((co) => co.user_id === p.id))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name ?? p.email}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+            <Field label="Working on" hint="Optional — what they're contributing">
+              <Input
+                value={addCoOwner.workingOn}
+                onChange={(e) => setAddCoOwner({ ...addCoOwner, workingOn: e.target.value })}
+                placeholder="e.g. Content review"
               />
             </Field>
           </>

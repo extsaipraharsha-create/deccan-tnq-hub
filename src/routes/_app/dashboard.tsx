@@ -21,8 +21,8 @@ export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard }
 
 function Dashboard() {
   const { role, profile } = useAuth();
-  const firstName = (profile?.name ?? profile?.email ?? "there").split(/[ @]/)[0];
   const dose = useMemo(() => pickDailyDose(profile?.id), [profile?.id]);
+  const firstName = (profile?.name ?? profile?.email ?? "there").split(/[ @]/)[0];
 
   const heroTitle =
     role === "super_admin"
@@ -41,11 +41,9 @@ function Dashboard() {
           {heroTitle}
         </h1>
       </div>
-
       {role === "contributor" && <ContributorDash dose={dose} />}
       {role === "tnq_team" && <SmeDash dose={dose} />}
       {role === "super_admin" && <AdminDash dose={dose} />}
-
       <QualityByProject role={role} />
     </div>
   );
@@ -210,7 +208,13 @@ function QualityByProject({ role }: { role: string | null }) {
 /* ---------------- CONTRIBUTOR ---------------- */
 function ContributorDash({ dose }: { dose: string }) {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ done: 0, total: 0, lastScore: 0, projectCount: 0 });
+  const [stats, setStats] = useState({
+    done: 0,
+    total: 0,
+    lastScore: 0,
+    projectCount: 0,
+    activeProjectCount: 0,
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -225,11 +229,22 @@ function ContributorDash({ dose }: { dose: string }) {
           .limit(1),
         supabase.from("contributors").select("projects").eq("id", user.id).maybeSingle(),
       ]);
+      const projectIds: string[] = contrib?.projects ?? [];
+      let activeProjectCount = 0;
+      if (projectIds.length > 0) {
+        const { count } = await supabase
+          .from("projects")
+          .select("id", { count: "exact", head: true })
+          .in("id", projectIds)
+          .eq("status", "active");
+        activeProjectCount = count ?? 0;
+      }
       setStats({
         done: prog?.filter((p) => p.status === "complete").length ?? 0,
         total: prog?.length ?? 0,
         lastScore: scores?.[0]?.score ?? 0,
-        projectCount: contrib?.projects?.length ?? 0,
+        projectCount: projectIds.length,
+        activeProjectCount,
       });
     })();
   }, [user]);
@@ -251,7 +266,7 @@ function ContributorDash({ dose }: { dose: string }) {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Modules done" value={stats.done} suffix={`of ${stats.total}`} />
-        <StatCard label="Onboarding %" value={pct} suffix="percent" />
+        <StatCard label="Active projects" value={stats.activeProjectCount} suffix="active" />
         <StatCard label="Last score" value={stats.lastScore || "0.0"} suffix="/100" />
         <StatCard label="Projects" value={stats.projectCount} suffix="assigned" />
       </div>
@@ -499,8 +514,8 @@ function AdminDash({ dose }: { dose: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Active projects" value={stats.projects} suffix={`of ${stats.projTotal}`} />
         <StatCard label="Team members" value={stats.members} suffix="global" />
-        <StatCard label="Onboarding %" value={stats.onboardingPct.toFixed(1)} />
-        <StatCard label="Avg quality" value={stats.avgScore.toFixed(1)} />
+        <StatCard label="Open issues" value={stats.openIssues} />
+        <StatCard label="Pending users" value={stats.pending} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

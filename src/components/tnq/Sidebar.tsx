@@ -56,7 +56,6 @@ const NAV: Record<AppRole, NavSection[]> = {
       label: "CONTENT",
       items: [
         { label: "Resources", to: "/resources", icon: Library },
-        { label: "📖 User Guide", to: "/guide", icon: BookOpen },
         { label: "Newcomers", to: "/newcomers", icon: GraduationCap },
       ],
     },
@@ -90,7 +89,6 @@ const NAV: Record<AppRole, NavSection[]> = {
       items: [
         { label: "Workspace", to: "/learning", icon: BookOpen },
         { label: "Resources", to: "/resources", icon: Library },
-        { label: "📖 User Guide", to: "/guide", icon: BookOpen },
       ],
     },
   ],
@@ -117,7 +115,6 @@ const NAV: Record<AppRole, NavSection[]> = {
       label: "CONTENT",
       items: [
         { label: "Resources", to: "/resources", icon: Library },
-        { label: "📖 User Guide", to: "/guide", icon: BookOpen },
       ],
     },
     {

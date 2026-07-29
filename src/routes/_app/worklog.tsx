@@ -236,7 +236,7 @@ function WorkLogPage() {
     });
   }, [entries, filterType, filterPriority, filterUser, filterProject, search, dateMode, dateValue]);
 
-  // Step 2: group by (user_id + day). For today, keep only the most recent per user.
+  // Step 2: group by (user_id + day). Every entry for the day is kept, newest first.
   type Group = { key: string; user_id: string; day: string; entries: Entry[] };
   const groups: Group[] = useMemo(() => {
     const map = new Map<string, Group>();
@@ -250,7 +250,6 @@ function WorkLogPage() {
     const out: Group[] = [];
     for (const g of map.values()) {
       g.entries.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      if (g.day === TODAY) g.entries = g.entries.slice(0, 1); // present day: only most recent
       out.push(g);
     }
     out.sort((a, b) => (a.day === b.day ? 0 : a.day < b.day ? 1 : -1));
@@ -332,6 +331,11 @@ function WorkLogPage() {
           <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase mb-2">
             What are you working on?
           </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Working on more than one thing? Post each one separately — pick its own project,
+            status, and deadline, then hit Post Update and do it again for the next one. Don't
+            list multiple tasks in a single entry.
+          </p>
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value.slice(0, 500))}

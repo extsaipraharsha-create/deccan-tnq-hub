@@ -18,6 +18,7 @@ type Entry = {
   project_id: string | null;
   entry_type: EntryType;
   priority: Priority;
+  deadline: string | null;
   created_at: string;
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
@@ -70,6 +71,24 @@ function dayKey(iso: string) {
 }
 const TODAY = dayKey(new Date().toISOString());
 
+function fmtDeadline(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+function isOverdue(iso: string) {
+  return new Date(iso).getTime() < Date.now();
+}
+function toDatetimeLocal(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function WorkLogPage() {
   const { user, role } = useAuth();
   const isAdmin = role === "super_admin";
@@ -82,6 +101,7 @@ function WorkLogPage() {
   const [projectId, setProjectId] = useState<string>("");
   const [entryType, setEntryType] = useState<EntryType>("working_on");
   const [selectedPriority, setSelectedPriority] = useState<Priority>("P2");
+  const [deadline, setDeadline] = useState<string>("");
 
   const [filterType, setFilterType] = useState<"all" | EntryType>("all");
   const [filterPriority, setFilterPriority] = useState<"all" | Priority>("all");
@@ -95,6 +115,7 @@ function WorkLogPage() {
   const [editContent, setEditContent] = useState("");
   const [editType, setEditType] = useState<EntryType>("working_on");
   const [editPriority, setEditPriority] = useState<Priority>("P2");
+  const [editDeadline, setEditDeadline] = useState<string>("");
 
   const [groupByPerson, setGroupByPerson] = useState(false);
 
@@ -152,6 +173,7 @@ function WorkLogPage() {
         project_id: projectId || null,
         entry_type: entryType,
         priority: selectedPriority,
+        deadline: deadline ? new Date(deadline).toISOString() : null,
       } as any);
     if (error) return toast.error(error.message);
     await supabase.from("activity_log").insert({
@@ -164,6 +186,7 @@ function WorkLogPage() {
     setProjectId("");
     setEntryType("working_on");
     setSelectedPriority("P2");
+    setDeadline("");
     toast.success("Posted");
   }
 
@@ -172,11 +195,17 @@ function WorkLogPage() {
     setEditContent(e.content);
     setEditType(e.entry_type);
     setEditPriority(e.priority || "P2");
+    setEditDeadline(e.deadline ? toDatetimeLocal(e.deadline) : "");
   }
   async function saveEdit(id: string) {
     const { error } = await supabase
       .from("work_log_entries")
-      .update({ content: editContent, entry_type: editType, priority: editPriority } as any)
+      .update({
+        content: editContent,
+        entry_type: editType,
+        priority: editPriority,
+        deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
+      } as any)
       .eq("id", id);
     if (error) return toast.error(error.message);
     setEditId(null);
@@ -345,6 +374,13 @@ function WorkLogPage() {
                   </option>
                 ))}
               </Select>
+              <Input
+                type="datetime-local"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                title="Your deadline for this task"
+                className="w-auto! h-8! text-xs!"
+              />
             </div>
             <div className="flex items-center gap-3">
               <span
@@ -544,6 +580,13 @@ function WorkLogPage() {
                                     </option>
                                   ))}
                                 </Select>
+                                <Input
+                                  type="datetime-local"
+                                  value={editDeadline}
+                                  onChange={(ev) => setEditDeadline(ev.target.value)}
+                                  title="Deadline"
+                                  className="h-7! text-xs! w-auto!"
+                                />
                               </>
                             ) : (
                               <>
@@ -553,6 +596,11 @@ function WorkLogPage() {
                                 <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
                                   {e.priority || "P2"}
                                 </Badge>
+                                {e.deadline && (
+                                  <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                    Due {fmtDeadline(e.deadline)}
+                                  </Badge>
+                                )}
                               </>
                             )}
                           </div>
@@ -717,6 +765,13 @@ function WorkLogPage() {
                                         </option>
                                       ))}
                                     </Select>
+                                    <Input
+                                      type="datetime-local"
+                                      value={editDeadline}
+                                      onChange={(ev) => setEditDeadline(ev.target.value)}
+                                      title="Deadline"
+                                      className="h-7! text-xs! w-auto!"
+                                    />
                                   </>
                                 ) : (
                                   <>
@@ -742,6 +797,13 @@ function WorkLogPage() {
                             ) : (
                               <div className="whitespace-pre-wrap text-foreground text-sm">
                                 {e.content}
+                              </div>
+                            )}
+                            {e.deadline && !editing && (
+                              <div className="mt-1">
+                                <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                  Due {fmtDeadline(e.deadline)}
+                                </Badge>
                               </div>
                             )}
                             <div className="mt-1.5 flex items-center justify-between gap-2">

@@ -42,6 +42,7 @@ type Playground = {
   access_url: string | null;
   content_url: string | null;
   dashboard_url: string | null;
+  deccanexperts_url: string | null;
   last_updated: string;
   last_updated_by: string | null;
   display_order: number;
@@ -56,6 +57,7 @@ type LPItem = {
   live_since: string | null;
   user_url: string | null;
   production_url: string | null;
+  deccanexperts_url: string | null;
   last_updated: string;
   last_updated_by: string | null;
   display_order: number;
@@ -315,7 +317,7 @@ function WorkspacePage() {
       supabase
         .from("playgrounds")
         .select(
-          "id,project_id,name,version_number,is_live,live_since,access_url,content_url,dashboard_url,last_updated,last_updated_by,display_order",
+          "id,project_id,name,version_number,is_live,live_since,access_url,content_url,dashboard_url,deccanexperts_url,last_updated,last_updated_by,display_order",
         ),
       (supabase as any).from("learning_path_items").select("*"),
       supabase.from("profiles").select("id,name,email"),
@@ -827,6 +829,7 @@ function PlaygroundTable({
           <th className="text-left px-4 py-2">Playground Link</th>
           <th className="text-left px-4 py-2">Content Link</th>
           <th className="text-left px-4 py-2">Dashboard Link</th>
+          <th className="text-left px-4 py-2">Deccan Experts Link</th>
           <th className="text-left px-4 py-2">Last Updated</th>
           {canWrite && <th className="text-left px-4 py-2">Actions</th>}
         </tr>
@@ -888,6 +891,15 @@ function PlaygroundTable({
                 onSave={(v) => onUpdate(r.id, { dashboard_url: v || null }, "dashboard_url")}
               />
             </td>
+            <td className="px-4 py-3">
+              <LinkCell
+                url={r.deccanexperts_url}
+                canEdit={canWrite}
+                onSave={(v) =>
+                  onUpdate(r.id, { deccanexperts_url: v || null }, "deccanexperts_url")
+                }
+              />
+            </td>
             <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
               {fmtDate(r.last_updated)} by {profileName(r.last_updated_by)}
             </td>
@@ -942,6 +954,7 @@ function LPTable({
           <th className="text-left px-4 py-2">Version</th>
           <th className="text-left px-4 py-2">User Link</th>
           <th className="text-left px-4 py-2">Production Link</th>
+          <th className="text-left px-4 py-2">Deccan Experts Link</th>
           <th className="text-left px-4 py-2">Last Updated</th>
           {canWrite && <th className="text-left px-4 py-2">Actions</th>}
         </tr>
@@ -996,6 +1009,15 @@ function LPTable({
                 onSave={(v) => onUpdate(r.id, { production_url: v || null }, "production_url")}
               />
             </td>
+            <td className="px-4 py-3">
+              <LinkCell
+                url={r.deccanexperts_url}
+                canEdit={canWrite}
+                onSave={(v) =>
+                  onUpdate(r.id, { deccanexperts_url: v || null }, "deccanexperts_url")
+                }
+              />
+            </td>
             <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
               {fmtDate(r.last_updated)} by {profileName(r.last_updated_by)}
             </td>
@@ -1045,6 +1067,7 @@ function AddPlaygroundModal({
     access_url: "",
     content_url: "",
     dashboard_url: "",
+    deccanexperts_url: "",
   });
   useEffect(() => {
     if (open)
@@ -1056,6 +1079,7 @@ function AddPlaygroundModal({
         access_url: "",
         content_url: "",
         dashboard_url: "",
+        deccanexperts_url: "",
       });
   }, [open]);
   async function save() {
@@ -1076,9 +1100,10 @@ function AddPlaygroundModal({
       access_url: form.access_url || null,
       content_url: form.content_url || null,
       dashboard_url: form.dashboard_url || null,
+      deccanexperts_url: form.deccanexperts_url || null,
       created_by: userId,
       last_updated_by: userId,
-    });
+    } as any);
     if (error) {
       toast.error(error.message);
       return;
@@ -1153,6 +1178,13 @@ function AddPlaygroundModal({
           placeholder="https://…"
         />
       </Field>
+      <Field label="Deccan Experts Link">
+        <Input
+          value={form.deccanexperts_url}
+          onChange={(e) => setForm({ ...form, deccanexperts_url: e.target.value })}
+          placeholder="https://…"
+        />
+      </Field>
     </Modal>
   );
 }
@@ -1177,6 +1209,7 @@ function AddLPModal({
     is_live: false,
     user_url: "",
     production_url: "",
+    deccanexperts_url: "",
   });
   useEffect(() => {
     if (open)
@@ -1187,6 +1220,7 @@ function AddLPModal({
         is_live: false,
         user_url: "",
         production_url: "",
+        deccanexperts_url: "",
       });
   }, [open]);
   async function save() {
@@ -1206,6 +1240,7 @@ function AddLPModal({
       live_since: form.is_live ? new Date().toISOString() : null,
       user_url: form.user_url || null,
       production_url: form.production_url || null,
+      deccanexperts_url: form.deccanexperts_url || null,
       created_by: userId,
       last_updated_by: userId,
     });
@@ -1273,6 +1308,13 @@ function AddLPModal({
         <Input
           value={form.production_url}
           onChange={(e) => setForm({ ...form, production_url: e.target.value })}
+          placeholder="https://…"
+        />
+      </Field>
+      <Field label="Deccan Experts Link">
+        <Input
+          value={form.deccanexperts_url}
+          onChange={(e) => setForm({ ...form, deccanexperts_url: e.target.value })}
           placeholder="https://…"
         />
       </Field>

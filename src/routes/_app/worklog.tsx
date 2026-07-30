@@ -23,6 +23,16 @@ type Entry = {
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
 type Project = { id: string; name: string; emoji_icon: string | null };
+type TaskDraft = {
+  content: string;
+  projectId: string;
+  entryType: EntryType;
+  priority: Priority;
+  deadline: string;
+};
+function blankTask(): TaskDraft {
+  return { content: "", projectId: "", entryType: "working_on", priority: "P2", deadline: "" };
+}
 
 const TYPES: {
   key: EntryType;
@@ -97,11 +107,7 @@ function WorkLogPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [content, setContent] = useState("");
-  const [projectId, setProjectId] = useState<string>("");
-  const [entryType, setEntryType] = useState<EntryType>("working_on");
-  const [selectedPriority, setSelectedPriority] = useState<Priority>("P2");
-  const [deadline, setDeadline] = useState<string>("");
+  const [tasks, setTasks] = useState<TaskDraft[]>([blankTask()]);
 
   const [filterType, setFilterType] = useState<"all" | EntryType>("all");
   const [filterPriority, setFilterPriority] = useState<"all" | Priority>("all");
@@ -160,34 +166,47 @@ function WorkLogPage() {
     };
   }, []);
 
-  async function post() {
-    const t = content.trim();
-    if (!t) return;
-    if (t.length > 500) return toast.error("Max 500 characters");
+  function updateTask(index: number, patch: Partial<TaskDraft>) {
+    setTasks((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+  }
+  function addTask() {
+    setTasks((prev) => [...prev, blankTask()]);
+  }
+  function removeTask(index: number) {
+    setTasks((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+  }
+
+  // Only rows with content typed in count toward validation/posting.
+  const activeTasks = tasks.filter((t) => t.content.trim().length > 0);
+  const tasksReady =
+    activeTasks.length > 0 && activeTasks.every((t) => t.content.trim().length <= 500 && t.deadline);
+
+  async function postAll() {
+    if (!tasksReady) return;
     const { error } = await supabase
       .from("work_log_entries")
       // Keep runtime identical; avoid Supabase generic typing inferring `never`.
-      .insert({
-        user_id: user!.id,
-        content: t,
-        project_id: projectId || null,
-        entry_type: entryType,
-        priority: selectedPriority,
-        deadline: deadline ? new Date(deadline).toISOString() : null,
-      } as any);
+      .insert(
+        activeTasks.map((t) => ({
+          user_id: user!.id,
+          content: t.content.trim(),
+          project_id: t.projectId || null,
+          entry_type: t.entryType,
+          priority: t.priority,
+          deadline: new Date(t.deadline).toISOString(),
+        })) as any,
+      );
     if (error) return toast.error(error.message);
-    await supabase.from("activity_log").insert({
-      user_id: user?.id ?? "",
-      action: "worklog_post",
-      action_type: "work_log",
-      details: { type: entryType },
-    } as any);
-    setContent("");
-    setProjectId("");
-    setEntryType("working_on");
-    setSelectedPriority("P2");
-    setDeadline("");
-    toast.success("Posted");
+    for (const t of activeTasks) {
+      await supabase.from("activity_log").insert({
+        user_id: user?.id ?? "",
+        action: "worklog_post",
+        action_type: "work_log",
+        details: { type: t.entryType },
+      } as any);
+    }
+    setTasks([blankTask()]);
+    toast.success(activeTasks.length > 1 ? `Posted ${activeTasks.length} updates` : "Posted");
   }
 
   function startEdit(e: Entry) {
@@ -331,71 +350,97 @@ function WorkLogPage() {
           <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase mb-2">
             What are you working on?
           </div>
-          <p className="text-xs text-muted-foreground mb-2">
-            Working on more than one thing? Post each one separately — pick its own project,
-            status, and deadline, then hit Post Update and do it again for the next one. Don't
-            list multiple tasks in a single entry.
+          <p className="text-xs text-muted-foreground mb-3">
+            Multiple things to report? Add a row for each one below — each becomes its own entry
+            with its own project, status, and deadline. Deadline is required for every task.
           </p>
-          <Textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value.slice(0, 500))}
-            placeholder="e.g. Reviewing Playground content for Agent Mode project…"
-            className="min-h-22.5"
-          />
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                className="w-auto! h-8! text-xs!"
-              >
-                <option value="">— Project (optional) —</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.emoji_icon ?? "📁"} {p.name}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                value={entryType}
-                onChange={(e) => setEntryType(e.target.value as EntryType)}
-                className="w-auto! h-8! text-xs!"
-              >
-                {TYPES.map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.label}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                value={selectedPriority}
-                onChange={(e) => setSelectedPriority(e.target.value as Priority)}
-                className="w-auto! h-8! text-xs!"
-              >
-                {PRIORITY_LIST.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                type="datetime-local"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                title="Your deadline for this task"
-                className="w-auto! h-8! text-xs!"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`font-mono text-xs ${content.length > 480 ? "text-destructive" : "text-muted-foreground"}`}
-              >
-                {content.length}/500
-              </span>
-              <Button onClick={post} disabled={!content.trim()}>
-                <Send className="h-3.5 w-3.5" /> Post Update
-              </Button>
-            </div>
+          <div className="space-y-3">
+            {tasks.map((t, i) => {
+              const missingDeadline = t.content.trim().length > 0 && !t.deadline;
+              return (
+                <div key={i} className="rounded-xl border border-border p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-mono text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                      Task {i + 1}
+                    </span>
+                    {tasks.length > 1 && (
+                      <button
+                        onClick={() => removeTask(i)}
+                        className="p-1 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Textarea
+                    value={t.content}
+                    onChange={(e) => updateTask(i, { content: e.target.value.slice(0, 500) })}
+                    placeholder="e.g. Reviewing Playground content for Agent Mode project…"
+                    className="min-h-15"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Select
+                      value={t.projectId}
+                      onChange={(e) => updateTask(i, { projectId: e.target.value })}
+                      className="w-auto! h-8! text-xs!"
+                    >
+                      <option value="">— Project (optional) —</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.emoji_icon ?? "📁"} {p.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      value={t.entryType}
+                      onChange={(e) => updateTask(i, { entryType: e.target.value as EntryType })}
+                      className="w-auto! h-8! text-xs!"
+                    >
+                      {TYPES.map((ty) => (
+                        <option key={ty.key} value={ty.key}>
+                          {ty.label}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      value={t.priority}
+                      onChange={(e) => updateTask(i, { priority: e.target.value as Priority })}
+                      className="w-auto! h-8! text-xs!"
+                    >
+                      {PRIORITY_LIST.map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      type="datetime-local"
+                      value={t.deadline}
+                      onChange={(e) => updateTask(i, { deadline: e.target.value })}
+                      title="Deadline for this task (required)"
+                      className={`w-auto! h-8! text-xs! ${missingDeadline ? "border-destructive!" : ""}`}
+                    />
+                    <span className="font-mono text-[11px] text-muted-foreground ml-auto">
+                      {t.content.length}/500
+                    </span>
+                  </div>
+                  {missingDeadline && (
+                    <div className="mt-1.5 text-xs text-destructive">
+                      Deadline required before this task can be posted.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <Button variant="secondary" size="sm" onClick={addTask}>
+              + Add another task
+            </Button>
+            <Button onClick={postAll} disabled={!tasksReady}>
+              <Send className="h-3.5 w-3.5" />
+              {activeTasks.length > 1 ? `Post All (${activeTasks.length})` : "Post Update"}
+            </Button>
           </div>
         </Card>
       )}

@@ -34,6 +34,22 @@ function blankTask(): TaskDraft {
   return { content: "", projectId: "", entryType: "working_on", priority: "P2", deadline: "" };
 }
 
+// A "batch" is every entry posted in the same click of Post/Post All — they
+// share the exact same created_at (Postgres evaluates `now()` once per
+// insert statement), so entries from one sitting stay together as one card,
+// while a later post (even seconds after) becomes its own new batch/card.
+type Batch = { key: string; user_id: string; created_at: string; items: Entry[] };
+function groupIntoBatches(entries: Entry[]): Batch[] {
+  const map = new Map<string, Batch>();
+  for (const e of entries) {
+    const k = `${e.user_id}|${e.created_at}`;
+    const b = map.get(k) ?? { key: k, user_id: e.user_id, created_at: e.created_at, items: [] };
+    b.items.push(e);
+    map.set(k, b);
+  }
+  return Array.from(map.values());
+}
+
 const TYPES: {
   key: EntryType;
   label: string;
@@ -79,8 +95,6 @@ function dayKey(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-const TODAY = dayKey(new Date().toISOString());
-
 function fmtDeadline(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -255,15 +269,16 @@ function WorkLogPage() {
     });
   }, [entries, filterType, filterPriority, filterUser, filterProject, search, dateMode, dateValue]);
 
-  // Step 2: group by (user_id + day). Every entry for the day is kept, newest first.
-  type Group = { key: string; user_id: string; day: string; entries: Entry[] };
+  // Step 2: group filtered entries into posting batches, then by (user_id + day).
+  type Group = { key: string; user_id: string; day: string; entries: Batch[] };
   const groups: Group[] = useMemo(() => {
+    const batches = groupIntoBatches(filtered);
     const map = new Map<string, Group>();
-    for (const e of filtered) {
-      const d = dayKey(e.created_at);
-      const k = `${e.user_id}|${d}`;
-      const g = map.get(k) ?? { key: k, user_id: e.user_id, day: d, entries: [] };
-      g.entries.push(e);
+    for (const b of batches) {
+      const d = dayKey(b.created_at);
+      const k = `${b.user_id}|${d}`;
+      const g = map.get(k) ?? { key: k, user_id: b.user_id, day: d, entries: [] };
+      g.entries.push(b);
       map.set(k, g);
     }
     const out: Group[] = [];
@@ -277,21 +292,22 @@ function WorkLogPage() {
 
   const maxCols = Math.max(1, ...groups.map((g) => g.entries.length));
 
-  // Person-grouped view data
+  // Person-grouped view data — one card per posting batch, newest first.
   const personGroups = useMemo(() => {
-    const map = new Map<string, Entry[]>();
-    for (const e of filtered) {
-      const arr = map.get(e.user_id) ?? [];
-      arr.push(e);
-      map.set(e.user_id, arr);
+    const batches = groupIntoBatches(filtered);
+    const map = new Map<string, Batch[]>();
+    for (const b of batches) {
+      const arr = map.get(b.user_id) ?? [];
+      arr.push(b);
+      map.set(b.user_id, arr);
     }
-    const out: { user_id: string; entries: Entry[] }[] = [];
-    for (const [user_id, entries] of map) {
-      entries.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      out.push({ user_id, entries });
+    const out: { user_id: string; batches: Batch[] }[] = [];
+    for (const [user_id, bs] of map) {
+      bs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      out.push({ user_id, batches: bs });
     }
-    // sort by most recent entry
-    out.sort((a, b) => b.entries[0].created_at.localeCompare(a.entries[0].created_at));
+    // sort by most recent batch
+    out.sort((a, b) => b.batches[0].created_at.localeCompare(a.batches[0].created_at));
     return out;
   }, [filtered]);
 
@@ -309,19 +325,21 @@ function WorkLogPage() {
         const author = profiles.find((p) => p.id === g.user_id);
         const name = author?.name ?? author?.email ?? "";
         const cells = Array.from({ length: maxCols }, (_, idx) => {
-          const e = g.entries[idx];
-          if (!e) return "";
-          const proj = projects.find((p) => p.id === e.project_id)?.name ?? "";
-          return `[${e.priority}] [${TYPE_LABEL[e.entry_type]}] ${e.content}${proj ? ` (${proj})` : ""} @ ${fmtTime(e.created_at)}`.replace(
-            /"/g,
-            '""',
-          );
+          const b = g.entries[idx];
+          if (!b) return "";
+          return b.items
+            .map((e) => {
+              const proj = projects.find((p) => p.id === e.project_id)?.name ?? "";
+              return `[${e.priority}] [${TYPE_LABEL[e.entry_type]}] ${e.content}${proj ? ` (${proj})` : ""} @ ${fmtTime(e.created_at)}`;
+            })
+            .join(" | ")
+            .replace(/"/g, '""');
         });
         return [
           String(i + 1),
           name,
           fmtDateOnly(g.day + "T00:00:00"),
-          g.entries[0]?.priority ?? "P2",
+          g.entries[0]?.items[0]?.priority ?? "P2",
           ...cells,
         ];
       }),
@@ -588,20 +606,23 @@ function WorkLogPage() {
                       {author?.name ?? author?.email ?? "—"}
                     </div>
                     <div className="font-mono text-[10px] text-muted-foreground">
-                      {pg.entries.length} update{pg.entries.length === 1 ? "" : "s"}
+                      {pg.batches.reduce((n, b) => n + b.items.length, 0)} update
+                      {pg.batches.reduce((n, b) => n + b.items.length, 0) === 1 ? "" : "s"}
                     </div>
                   </div>
                 </div>
-                {/* Entries */}
+                {/* Batches (one card section per posting session) */}
                 <div className="divide-y divide-border">
-                  {pg.entries.map((e) => {
+                  {pg.batches.map((batch) => (
+                    <div key={batch.key}>
+                      {batch.items.map((e, itemIdx) => {
                     const proj = projects.find((p) => p.id === e.project_id);
                     const editable = isAdmin || e.user_id === user?.id;
                     const editing = editId === e.id;
                     return (
                       <div
                         key={e.id}
-                        className={`px-5 py-4 ${e.priority === "P0" ? "border-l-4 border-l-red-500" : ""}`}
+                        className={`px-5 py-4 ${e.priority === "P0" ? "border-l-4 border-l-red-500" : ""} ${itemIdx > 0 ? "border-t border-dashed border-border/60" : ""}`}
                       >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <div className="flex items-center gap-2">
@@ -709,7 +730,9 @@ function WorkLogPage() {
                         )}
                       </div>
                     );
-                  })}
+                      })}
+                    </div>
+                  ))}
                 </div>
               </Card>
             );
@@ -740,7 +763,7 @@ function WorkLogPage() {
                   return (
                     <tr
                       key={g.key}
-                      className={`hover:bg-accent/30 align-top ${g.entries[0]?.priority === "P0" ? "border-l-4 border-l-red-500" : ""}`}
+                      className={`hover:bg-accent/30 align-top ${g.entries[0]?.items[0]?.priority === "P0" ? "border-l-4 border-l-red-500" : ""}`}
                     >
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{i + 1}</td>
                       <td className="px-3 py-3">
@@ -759,142 +782,156 @@ function WorkLogPage() {
                       </td>
                       <td className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap font-mono">
                         {fmtDateOnly(g.day + "T00:00:00")}
-                        {g.day === TODAY && (
-                          <div className="text-[10px] text-primary mt-0.5">Today · latest only</div>
-                        )}
                       </td>
                       <td className="px-3 py-3">
-                        <Badge tone={PRIORITY_TONE[g.entries[0]?.priority || "P2"]}>
-                          {g.entries[0]?.priority || "P2"}
+                        <Badge tone={PRIORITY_TONE[g.entries[0]?.items[0]?.priority || "P2"]}>
+                          {g.entries[0]?.items[0]?.priority || "P2"}
                         </Badge>
                       </td>
                       <td className="px-3 py-3">
-                        <Badge tone={TYPE_TONE[g.entries[0]?.entry_type || "working_on"]}>
-                          {TYPE_LABEL[g.entries[0]?.entry_type || "working_on"]}
+                        <Badge tone={TYPE_TONE[g.entries[0]?.items[0]?.entry_type || "working_on"]}>
+                          {TYPE_LABEL[g.entries[0]?.items[0]?.entry_type || "working_on"]}
                         </Badge>
                       </td>
                       {Array.from({ length: maxCols }, (_, idx) => {
-                        const e = g.entries[idx];
-                        if (!e)
+                        const b = g.entries[idx];
+                        if (!b)
                           return (
                             <td key={idx} className="px-3 py-3 text-xs text-muted-foreground">
                               —
                             </td>
                           );
-                        const proj = projects.find((p) => p.id === e.project_id);
-                        const editable = isAdmin || e.user_id === user?.id;
-                        const editing = editId === e.id;
                         return (
                           <td key={idx} className="px-3 py-3 min-w-65 max-w-90">
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <div className="flex items-center gap-2">
-                                {editing ? (
-                                  <>
-                                    <Select
-                                      value={editType}
-                                      onChange={(ev) => setEditType(ev.target.value as EntryType)}
-                                      className="h-7! text-xs! w-auto!"
-                                    >
-                                      {TYPES.map((t) => (
-                                        <option key={t.key} value={t.key}>
-                                          {t.label}
-                                        </option>
-                                      ))}
-                                    </Select>
-                                    <Select
-                                      value={editPriority}
-                                      onChange={(ev) =>
-                                        setEditPriority(ev.target.value as Priority)
-                                      }
-                                      className="h-7! text-xs! w-auto!"
-                                    >
-                                      {PRIORITY_LIST.map((p) => (
-                                        <option key={p.key} value={p.key}>
-                                          {p.label}
-                                        </option>
-                                      ))}
-                                    </Select>
-                                    <Input
-                                      type="datetime-local"
-                                      value={editDeadline}
-                                      onChange={(ev) => setEditDeadline(ev.target.value)}
-                                      title="Deadline"
-                                      className="h-7! text-xs! w-auto!"
-                                    />
-                                  </>
-                                ) : (
-                                  <>
-                                    <Badge tone={TYPE_TONE[e.entry_type]}>
-                                      {TYPE_LABEL[e.entry_type]}
-                                    </Badge>
-                                    <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
-                                      {e.priority || "P2"}
-                                    </Badge>
-                                  </>
-                                )}
-                              </div>
-                              <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
-                                {fmtTime(e.created_at)}
-                              </span>
-                            </div>
-                            {editing ? (
-                              <Textarea
-                                value={editContent}
-                                onChange={(ev) => setEditContent(ev.target.value)}
-                                className="min-h-15"
-                              />
-                            ) : (
-                              <div className="whitespace-pre-wrap text-foreground text-sm">
-                                {e.content}
-                              </div>
-                            )}
-                            {e.deadline && !editing && (
-                              <div className="mt-1">
-                                <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
-                                  Due {fmtDeadline(e.deadline)}
-                                </Badge>
-                              </div>
-                            )}
-                            <div className="mt-1.5 flex items-center justify-between gap-2">
-                              {proj ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
-                                  {proj.emoji_icon ?? "📁"} {proj.name}
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-muted-foreground">—</span>
-                              )}
-                              {editable &&
-                                (editing ? (
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => saveEdit(e.id)}
-                                      className="p-1 text-emerald-600 hover:text-emerald-700"
-                                    >
-                                      <Check className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => setEditId(null)}
-                                      className="p-1 text-muted-foreground hover:text-foreground"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
+                            <div className="space-y-2">
+                              {b.items.map((e, itemIdx) => {
+                                const proj = projects.find((p) => p.id === e.project_id);
+                                const editable = isAdmin || e.user_id === user?.id;
+                                const editing = editId === e.id;
+                                return (
+                                  <div
+                                    key={e.id}
+                                    className={
+                                      itemIdx > 0
+                                        ? "pt-2 border-t border-dashed border-border/60"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                      <div className="flex items-center gap-2">
+                                        {editing ? (
+                                          <>
+                                            <Select
+                                              value={editType}
+                                              onChange={(ev) =>
+                                                setEditType(ev.target.value as EntryType)
+                                              }
+                                              className="h-7! text-xs! w-auto!"
+                                            >
+                                              {TYPES.map((t) => (
+                                                <option key={t.key} value={t.key}>
+                                                  {t.label}
+                                                </option>
+                                              ))}
+                                            </Select>
+                                            <Select
+                                              value={editPriority}
+                                              onChange={(ev) =>
+                                                setEditPriority(ev.target.value as Priority)
+                                              }
+                                              className="h-7! text-xs! w-auto!"
+                                            >
+                                              {PRIORITY_LIST.map((p) => (
+                                                <option key={p.key} value={p.key}>
+                                                  {p.label}
+                                                </option>
+                                              ))}
+                                            </Select>
+                                            <Input
+                                              type="datetime-local"
+                                              value={editDeadline}
+                                              onChange={(ev) => setEditDeadline(ev.target.value)}
+                                              title="Deadline"
+                                              className="h-7! text-xs! w-auto!"
+                                            />
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Badge tone={TYPE_TONE[e.entry_type]}>
+                                              {TYPE_LABEL[e.entry_type]}
+                                            </Badge>
+                                            <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
+                                              {e.priority || "P2"}
+                                            </Badge>
+                                          </>
+                                        )}
+                                      </div>
+                                      <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                                        {fmtTime(e.created_at)}
+                                      </span>
+                                    </div>
+                                    {editing ? (
+                                      <Textarea
+                                        value={editContent}
+                                        onChange={(ev) => setEditContent(ev.target.value)}
+                                        className="min-h-15"
+                                      />
+                                    ) : (
+                                      <div className="whitespace-pre-wrap text-foreground text-sm">
+                                        {e.content}
+                                      </div>
+                                    )}
+                                    {e.deadline && !editing && (
+                                      <div className="mt-1">
+                                        <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                          Due {fmtDeadline(e.deadline)}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                                      {proj ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
+                                          {proj.emoji_icon ?? "📁"} {proj.name}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-muted-foreground">—</span>
+                                      )}
+                                      {editable &&
+                                        (editing ? (
+                                          <div className="flex gap-1">
+                                            <button
+                                              onClick={() => saveEdit(e.id)}
+                                              className="p-1 text-emerald-600 hover:text-emerald-700"
+                                            >
+                                              <Check className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              onClick={() => setEditId(null)}
+                                              className="p-1 text-muted-foreground hover:text-foreground"
+                                            >
+                                              <X className="h-3.5 w-3.5" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex gap-1">
+                                            <button
+                                              onClick={() => startEdit(e)}
+                                              className="p-1 text-muted-foreground hover:text-foreground"
+                                            >
+                                              <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              onClick={() => remove(e.id)}
+                                              className="p-1 text-muted-foreground hover:text-destructive"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                    </div>
                                   </div>
-                                ) : (
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => startEdit(e)}
-                                      className="p-1 text-muted-foreground hover:text-foreground"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => remove(e.id)}
-                                      className="p-1 text-muted-foreground hover:text-destructive"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
+                                );
+                              })}
                             </div>
                           </td>
                         );

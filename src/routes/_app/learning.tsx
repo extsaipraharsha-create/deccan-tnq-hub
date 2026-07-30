@@ -32,6 +32,15 @@ import { toast } from "sonner";
 type Project = { id: string; name: string; audience_type: string | null; status: string | null };
 type Profile = { id: string; name: string | null; email: string | null };
 
+// Pseudo-project bucket for playgrounds/learning paths that aren't linked to a real project.
+const UNASSIGNED_ID = "__unassigned__";
+const UNASSIGNED_PROJECT: Project = {
+  id: UNASSIGNED_ID,
+  name: "No Project",
+  audience_type: null,
+  status: null,
+};
+
 type Playground = {
   id: string;
   project_id: string | null;
@@ -362,10 +371,9 @@ function WorkspacePage() {
   }, [projects, projectFilter, isContributor, assignedProjectIds]);
 
   const itemsForProject = (pid: string): (Playground | LPItem)[] => {
-    const rows =
-      tab === "playgrounds"
-        ? playgrounds.filter((r) => r.project_id === pid)
-        : lpItems.filter((r) => r.project_id === pid);
+    const matches = (r: { project_id: string | null }) =>
+      pid === UNASSIGNED_ID ? !r.project_id : r.project_id === pid;
+    const rows = tab === "playgrounds" ? playgrounds.filter(matches) : lpItems.filter(matches);
     return (rows as any[]).filter((r) => {
       if (q && !r.name.toLowerCase().includes(q.toLowerCase())) return false;
       if (liveFilter === "live" && !r.is_live) return false;
@@ -400,6 +408,7 @@ function WorkspacePage() {
     if (q || liveFilter !== "all" || versionFilter) return itemsForProject(p.id).length > 0;
     return true;
   });
+  const unassignedItems = itemsForProject(UNASSIGNED_ID);
 
   // ----- Update helpers -----
   async function updatePlay(id: string, patch: Partial<Playground>, fieldLabel: string) {
@@ -589,7 +598,7 @@ function WorkspacePage() {
         <Card>
           <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
         </Card>
-      ) : groupsToRender.length === 0 ? (
+      ) : groupsToRender.length === 0 && unassignedItems.length === 0 ? (
         <Card>
           <EmptyState
             icon={
@@ -651,6 +660,26 @@ function WorkspacePage() {
             ))}
           </div>
         </SortableList>
+      )}
+
+      {!loading && unassignedItems.length > 0 && (
+        <div className="mt-3">
+          <ProjectGroup
+            handle={null}
+            project={UNASSIGNED_PROJECT}
+            tab={tab}
+            items={unassignedItems}
+            canWrite={canWrite}
+            canDelete={canDelete}
+            profileName={profileName}
+            onUpdatePlay={updatePlay}
+            onUpdateLP={updateLP}
+            onDeletePlay={deletePlay}
+            onDeleteLP={deleteLP}
+            onAddPlayVersion={addPlayVersion}
+            onAddLPVersion={addLPVersion}
+          />
+        </div>
       )}
 
       <AddPlaygroundModal
@@ -750,13 +779,19 @@ function ProjectGroup({
         >
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
-        <Link
-          to="/projects/$id"
-          params={{ id: project.id }}
-          className="flex items-center gap-2 font-semibold text-foreground hover:underline"
-        >
-          {project.name}
-        </Link>
+        {project.id === UNASSIGNED_ID ? (
+          <span className="flex items-center gap-2 font-semibold text-muted-foreground italic">
+            {project.name}
+          </span>
+        ) : (
+          <Link
+            to="/projects/$id"
+            params={{ id: project.id }}
+            className="flex items-center gap-2 font-semibold text-foreground hover:underline"
+          >
+            {project.name}
+          </Link>
+        )}
         {project.audience_type && <Badge tone="info">{project.audience_type}</Badge>}
         {project.status && (
           <Badge tone={project.status === "active" ? "success" : "default"}>{project.status}</Badge>
@@ -1083,16 +1118,12 @@ function AddPlaygroundModal({
       });
   }, [open]);
   async function save() {
-    if (!form.project_id) {
-      toast.error("Project required");
-      return;
-    }
     if (!form.name.trim()) {
       toast.error("Name required");
       return;
     }
     const { error } = await supabase.from("playgrounds").insert({
-      project_id: form.project_id,
+      project_id: form.project_id || null,
       name: form.name.trim(),
       version_number: form.version || "V1",
       is_live: form.is_live,
@@ -1125,12 +1156,12 @@ function AddPlaygroundModal({
         </>
       }
     >
-      <Field label="Project">
+      <Field label="Project (optional)">
         <Select
           value={form.project_id}
           onChange={(e) => setForm({ ...form, project_id: e.target.value })}
         >
-          <option value="">— Select project —</option>
+          <option value="">— No project —</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}

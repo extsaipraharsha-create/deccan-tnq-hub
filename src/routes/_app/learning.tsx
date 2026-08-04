@@ -339,7 +339,7 @@ function WorkspacePage() {
     setLoading(false);
   }
   useEffect(() => {
-    load(); /* eslint-disable-next-line */
+    load();
   }, [user?.id, role]);
 
   const profileName = (id: string | null) => {

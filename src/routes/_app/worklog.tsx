@@ -9,7 +9,13 @@ import { Card, Button, Textarea, Select, Input, Badge, EmptyState } from "@/comp
 import { MessageSquare, Send, Pencil, Trash2, Download, Check, X, Search, Users, List } from "lucide-react";
 import { toast } from "sonner";
 
-type EntryType = "working_on" | "need_help" | "completed" | "blocked" | "review_needed";
+type EntryType =
+  | "working_on"
+  | "need_help"
+  | "completed"
+  | "blocked"
+  | "review_needed"
+  | "available_to_help";
 type Priority = "P0" | "P1" | "P2" | "P3";
 type Entry = {
   id: string;
@@ -60,6 +66,7 @@ const TYPES: {
   { key: "completed", label: "Completed", tone: "success" },
   { key: "blocked", label: "Blocked", tone: "danger" },
   { key: "review_needed", label: "Review Needed", tone: "default" },
+  { key: "available_to_help", label: "Available to Help", tone: "success" },
 ];
 const TYPE_LABEL: Record<EntryType, string> = Object.fromEntries(
   TYPES.map((t) => [t.key, t.label]),

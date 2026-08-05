@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, EmptyState, Badge } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Beaker, FileText, ExternalLink } from "lucide-react";
 
 interface PG {
@@ -34,42 +35,44 @@ function MyPlaygroundPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = async () => {
     if (!user) return;
-    (async () => {
-      const { data: c } = await supabase
-        .from("contributors")
-        .select("playground_id")
-        .eq("id", user.id)
-        .maybeSingle();
-      const pid = (c as any)?.playground_id;
-      if (!pid) {
-        setLoading(false);
-        return;
-      }
-      const [{ data: p }, { data: d }, { data: i }] = await Promise.all([
-        supabase
-          .from("playgrounds")
-          .select("id,name,status,progress_percent,description,access_url")
-          .eq("id", pid)
-          .maybeSingle(),
-        supabase
-          .from("playground_documents")
-          .select("id,name,type,url,uploaded_at")
-          .eq("playground_id", pid)
-          .order("uploaded_at", { ascending: false }),
-        supabase
-          .from("playground_content_items")
-          .select("id,component_name,status,notes")
-          .eq("playground_id", pid)
-          .order("last_updated", { ascending: false }),
-      ]);
-      setPg(p as PG | null);
-      setDocs((d as Doc[]) ?? []);
-      setItems((i as Item[]) ?? []);
+    const { data: c } = await supabase
+      .from("contributors")
+      .select("playground_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const pid = (c as any)?.playground_id;
+    if (!pid) {
       setLoading(false);
-    })();
+      return;
+    }
+    const [{ data: p }, { data: d }, { data: i }] = await Promise.all([
+      supabase
+        .from("playgrounds")
+        .select("id,name,status,progress_percent,description,access_url")
+        .eq("id", pid)
+        .maybeSingle(),
+      supabase
+        .from("playground_documents")
+        .select("id,name,type,url,uploaded_at")
+        .eq("playground_id", pid)
+        .order("uploaded_at", { ascending: false }),
+      supabase
+        .from("playground_content_items")
+        .select("id,component_name,status,notes")
+        .eq("playground_id", pid)
+        .order("last_updated", { ascending: false }),
+    ]);
+    setPg(p as PG | null);
+    setDocs((d as Doc[]) ?? []);
+    setItems((i as Item[]) ?? []);
+    setLoading(false);
+  };
+  useEffect(() => {
+    load();
   }, [user]);
+  useAutoRefresh(load);
 
   return (
     <div>

@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, StatCard, EmptyState, StatusPill, Badge } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
@@ -71,30 +72,33 @@ function QualityByProject({ role }: { role: string | null }) {
     { id: string; name: string | null; email: string | null }[]
   >([]);
 
+  const load = async () => {
+    const { data: ps } = await supabase
+      .from("projects")
+      .select(
+        "id,name,status,audience_type,version,tasking_live,sme_owner_id,emoji_icon,current_owner_ids",
+      );
+    const { data: sc } = await supabase
+      .from("quality_scores")
+      .select("project_id,contributor_id,score");
+    const { data: profs } = await supabase.from("profiles").select("id,name,email");
+    const byProj: Record<string, number[]> = {};
+    const byMine: Record<string, number[]> = {};
+    (sc ?? []).forEach((s: any) => {
+      if (!s.project_id) return;
+      (byProj[s.project_id] ||= []).push(Number(s.score));
+      if (s.contributor_id === user?.id) (byMine[s.project_id] ||= []).push(Number(s.score));
+    });
+    setProjects((ps as any) ?? []);
+    setScoresByProj(byProj);
+    setMineByProj(byMine);
+    setProfiles((profs as any) ?? []);
+  };
+
   useEffect(() => {
-    (async () => {
-      const { data: ps } = await supabase
-        .from("projects")
-        .select(
-          "id,name,status,audience_type,version,tasking_live,sme_owner_id,emoji_icon,current_owner_ids",
-        );
-      const { data: sc } = await supabase
-        .from("quality_scores")
-        .select("project_id,contributor_id,score");
-      const { data: profs } = await supabase.from("profiles").select("id,name,email");
-      const byProj: Record<string, number[]> = {};
-      const byMine: Record<string, number[]> = {};
-      (sc ?? []).forEach((s: any) => {
-        if (!s.project_id) return;
-        (byProj[s.project_id] ||= []).push(Number(s.score));
-        if (s.contributor_id === user?.id) (byMine[s.project_id] ||= []).push(Number(s.score));
-      });
-      setProjects((ps as any) ?? []);
-      setScoresByProj(byProj);
-      setMineByProj(byMine);
-      setProfiles((profs as any) ?? []);
-    })();
+    load();
   }, [user?.id]);
+  useAutoRefresh(load);
 
   const visible = useMemo(() => {
     if (role === "tnq_team")
@@ -216,38 +220,41 @@ function ContributorDash({ dose }: { dose: string }) {
     activeProjectCount: 0,
   });
 
-  useEffect(() => {
+  const load = async () => {
     if (!user) return;
-    (async () => {
-      const [{ data: prog }, { data: scores }, { data: contrib }] = await Promise.all([
-        supabase.from("contributor_progress").select("status").eq("contributor_id", user.id),
-        supabase
-          .from("quality_scores")
-          .select("score")
-          .eq("contributor_id", user.id)
-          .order("review_date", { ascending: false })
-          .limit(1),
-        supabase.from("contributors").select("projects").eq("id", user.id).maybeSingle(),
-      ]);
-      const projectIds: string[] = contrib?.projects ?? [];
-      let activeProjectCount = 0;
-      if (projectIds.length > 0) {
-        const { count } = await supabase
-          .from("projects")
-          .select("id", { count: "exact", head: true })
-          .in("id", projectIds)
-          .eq("status", "active");
-        activeProjectCount = count ?? 0;
-      }
-      setStats({
-        done: prog?.filter((p) => p.status === "complete").length ?? 0,
-        total: prog?.length ?? 0,
-        lastScore: scores?.[0]?.score ?? 0,
-        projectCount: projectIds.length,
-        activeProjectCount,
-      });
-    })();
+    const [{ data: prog }, { data: scores }, { data: contrib }] = await Promise.all([
+      supabase.from("contributor_progress").select("status").eq("contributor_id", user.id),
+      supabase
+        .from("quality_scores")
+        .select("score")
+        .eq("contributor_id", user.id)
+        .order("review_date", { ascending: false })
+        .limit(1),
+      supabase.from("contributors").select("projects").eq("id", user.id).maybeSingle(),
+    ]);
+    const projectIds: string[] = contrib?.projects ?? [];
+    let activeProjectCount = 0;
+    if (projectIds.length > 0) {
+      const { count } = await supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .in("id", projectIds)
+        .eq("status", "active");
+      activeProjectCount = count ?? 0;
+    }
+    setStats({
+      done: prog?.filter((p) => p.status === "complete").length ?? 0,
+      total: prog?.length ?? 0,
+      lastScore: scores?.[0]?.score ?? 0,
+      projectCount: projectIds.length,
+      activeProjectCount,
+    });
+  };
+
+  useEffect(() => {
+    load();
   }, [user]);
+  useAutoRefresh(load);
 
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
 
@@ -322,46 +329,49 @@ function SmeDash({ dose }: { dose: string }) {
     openIssuesThisWeek: 0,
   });
 
-  useEffect(() => {
+  const load = async () => {
     if (!user) return;
-    (async () => {
-      const [{ count: projCount }, { data: contribs }] = await Promise.all([
-        supabase
-          .from("projects")
-          .select("id", { count: "exact", head: true })
-          .eq("sme_owner_id", user.id),
-        supabase.from("contributors").select("id").eq("sme_id", user.id),
-      ]);
-      const ids = (contribs ?? []).map((c) => c.id);
-      // (Removed Avg quality / Onboarding % stat cards per request)
-      // Remaining SME stats are computed below for:
-      // - Active Contributors
-      // - Open Issues This Week
-      void ids;
-      // Active Contributors + Open Issues This Week stats
-      const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const sevenDaysAgoISO = sevenDaysAgo.toISOString();
-
-      const { count: activeCount } = await supabase
-        .from("contributors")
+    const [{ count: projCount }, { data: contribs }] = await Promise.all([
+      supabase
+        .from("projects")
         .select("id", { count: "exact", head: true })
-        .neq("onboarding_status", "not_started");
+        .eq("sme_owner_id", user.id),
+      supabase.from("contributors").select("id").eq("sme_id", user.id),
+    ]);
+    const ids = (contribs ?? []).map((c) => c.id);
+    // (Removed Avg quality / Onboarding % stat cards per request)
+    // Remaining SME stats are computed below for:
+    // - Active Contributors
+    // - Open Issues This Week
+    void ids;
+    // Active Contributors + Open Issues This Week stats
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgoISO = sevenDaysAgo.toISOString();
 
-      const { count: openWeekCount } = await supabase
-        .from("quality_issues")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "open")
-        .gte("created_at", sevenDaysAgoISO);
+    const { count: activeCount } = await supabase
+      .from("contributors")
+      .select("id", { count: "exact", head: true })
+      .neq("onboarding_status", "not_started");
 
-      setStats({
-        projects: projCount ?? 0,
-        contributors: ids.length,
-        activeContributors: activeCount ?? 0,
-        openIssuesThisWeek: openWeekCount ?? 0,
-      });
-    })();
+    const { count: openWeekCount } = await supabase
+      .from("quality_issues")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open")
+      .gte("created_at", sevenDaysAgoISO);
+
+    setStats({
+      projects: projCount ?? 0,
+      contributors: ids.length,
+      activeContributors: activeCount ?? 0,
+      openIssuesThisWeek: openWeekCount ?? 0,
+    });
+  };
+
+  useEffect(() => {
+    load();
   }, [user]);
+  useAutoRefresh(load);
 
   return (
     <>
@@ -421,20 +431,9 @@ function AdminDash({ dose }: { dose: string }) {
     { name: string; sme: string; score: number | null; status: string }[]
   >([]);
 
-  useEffect(() => {
-    (async () => {
-      const [
-        activeProj,
-        totalProj,
-        members,
-        issues,
-        pending,
-        allRoles,
-        prog,
-        scores,
-        projs,
-        profs,
-      ] = await Promise.all([
+  const load = async () => {
+    const [activeProj, totalProj, members, issues, pending, allRoles, prog, scores, projs, profs] =
+      await Promise.all([
         supabase
           .from("projects")
           .select("id", { count: "exact", head: true })
@@ -456,49 +455,53 @@ function AdminDash({ dose }: { dose: string }) {
         supabase.from("profiles").select("id,name,email"),
       ]);
 
-      const total = prog.data?.length ?? 0;
-      const done = prog.data?.filter((p) => p.status === "complete").length ?? 0;
-      const onb = total ? Math.round((done / total) * 100) : 0;
-      const avg = scores.data?.length
-        ? Math.round(
-            (scores.data.reduce((a, b) => a + Number(b.score), 0) / scores.data.length) * 10,
-          ) / 10
-        : 0;
+    const total = prog.data?.length ?? 0;
+    const done = prog.data?.filter((p) => p.status === "complete").length ?? 0;
+    const onb = total ? Math.round((done / total) * 100) : 0;
+    const avg = scores.data?.length
+      ? Math.round(
+          (scores.data.reduce((a, b) => a + Number(b.score), 0) / scores.data.length) * 10,
+        ) / 10
+      : 0;
 
-      const profMap = new Map((profs.data ?? []).map((p: any) => [p.id, p.name ?? p.email]));
-      setProjects(
-        (projs.data ?? []).map((p: any) => ({
-          name: p.name,
-          sme: profMap.get(p.sme_owner_id) ?? "Unassigned",
-          score: null,
-          status: p.status,
-        })),
-      );
+    const profMap = new Map((profs.data ?? []).map((p: any) => [p.id, p.name ?? p.email]));
+    setProjects(
+      (projs.data ?? []).map((p: any) => ({
+        name: p.name,
+        sme: profMap.get(p.sme_owner_id) ?? "Unassigned",
+        score: null,
+        status: p.status,
+      })),
+    );
 
-      const roleCounts: Record<string, number> = {
-        super_admin: 0,
-        tnq_team: 0,
-        viewer: 0,
-        contributor: 0,
-        pending: 0,
-      };
-      (allRoles.data ?? []).forEach((r: any) => {
-        const k = r.status === "pending" ? "pending" : r.role;
-        roleCounts[k] = (roleCounts[k] ?? 0) + 1;
-      });
-      setRoles(roleCounts);
+    const roleCounts: Record<string, number> = {
+      super_admin: 0,
+      tnq_team: 0,
+      viewer: 0,
+      contributor: 0,
+      pending: 0,
+    };
+    (allRoles.data ?? []).forEach((r: any) => {
+      const k = r.status === "pending" ? "pending" : r.role;
+      roleCounts[k] = (roleCounts[k] ?? 0) + 1;
+    });
+    setRoles(roleCounts);
 
-      setStats({
-        projects: activeProj.count ?? 0,
-        projTotal: totalProj.count ?? 0,
-        members: members.count ?? 0,
-        openIssues: issues.count ?? 0,
-        pending: pending.count ?? 0,
-        onboardingPct: onb,
-        avgScore: avg,
-      });
-    })();
+    setStats({
+      projects: activeProj.count ?? 0,
+      projTotal: totalProj.count ?? 0,
+      members: members.count ?? 0,
+      openIssues: issues.count ?? 0,
+      pending: pending.count ?? 0,
+      onboardingPct: onb,
+      avgScore: avg,
+    });
+  };
+
+  useEffect(() => {
+    load();
   }, []);
+  useAutoRefresh(load);
 
   return (
     <>

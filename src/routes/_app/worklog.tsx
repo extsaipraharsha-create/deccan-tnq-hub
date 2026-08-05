@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Card, Button, Textarea, Select, Input, Badge, EmptyState } from "@/components/tnq/ui";
 import { MessageSquare, Send, Pencil, Trash2, Download, Check, X, Search, Users, List } from "lucide-react";
 import { toast } from "sonner";
@@ -159,6 +160,10 @@ function WorkLogPage() {
   useEffect(() => {
     load();
   }, []);
+  // Backstop in case the realtime subscription below doesn't fire (e.g. the
+  // table isn't in the DB's realtime publication) — polling + focus refetch
+  // still keeps this page current.
+  useAutoRefresh(load);
 
   // Realtime subscription
   useEffect(() => {

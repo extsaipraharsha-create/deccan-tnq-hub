@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, Input, Select, Badge, EmptyState, Button } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Users2 } from "lucide-react";
 
 interface Row {
@@ -50,6 +51,7 @@ function ContributorsPage() {
   useEffect(() => {
     load();
   }, []);
+  useAutoRefresh(load);
 
   async function assignSme(id: string, sme_id: string) {
     await supabase

@@ -14,6 +14,7 @@ import {
 } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Plus, Target, AlertCircle, Power } from "lucide-react";
 import { toast } from "sonner";
 
@@ -99,6 +100,7 @@ function QualityPage() {
   useEffect(() => {
     load();
   }, []);
+  useAutoRefresh(load);
 
   const projectStats = useMemo(() => {
     return projects.map((p) => {

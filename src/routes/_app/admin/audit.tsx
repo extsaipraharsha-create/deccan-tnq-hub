@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, Input, Badge, EmptyState } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { ScrollText } from "lucide-react";
 
 interface Row {
@@ -29,17 +30,19 @@ function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
+  const load = async () => {
+    const { data } = await supabase
+      .from("activity_log")
+      .select("*")
+      .order("timestamp", { ascending: false })
+      .limit(500);
+    setRows((data as Row[]) ?? []);
+    setLoading(false);
+  };
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("activity_log")
-        .select("*")
-        .order("timestamp", { ascending: false })
-        .limit(500);
-      setRows((data as Row[]) ?? []);
-      setLoading(false);
-    })();
+    load();
   }, []);
+  useAutoRefresh(load);
 
   const filtered = useMemo(() => {
     const t = q.toLowerCase();

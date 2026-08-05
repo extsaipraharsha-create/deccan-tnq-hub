@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, EmptyState, Badge } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { TrendingUp, Award } from "lucide-react";
 
 interface Prog {
@@ -25,26 +26,28 @@ function MyProgressPage() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = async () => {
     if (!user) return;
-    (async () => {
-      const [{ data: p }, { data: a }] = await Promise.all([
-        supabase
-          .from("contributor_progress")
-          .select("*")
-          .eq("contributor_id", user.id)
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("contributor_achievements")
-          .select("*")
-          .eq("contributor_id", user.id)
-          .order("earned_at", { ascending: false }),
-      ]);
-      setProgress((p as Prog[]) ?? []);
-      setAchievements((a as Achievement[]) ?? []);
-      setLoading(false);
-    })();
+    const [{ data: p }, { data: a }] = await Promise.all([
+      supabase
+        .from("contributor_progress")
+        .select("*")
+        .eq("contributor_id", user.id)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("contributor_achievements")
+        .select("*")
+        .eq("contributor_id", user.id)
+        .order("earned_at", { ascending: false }),
+    ]);
+    setProgress((p as Prog[]) ?? []);
+    setAchievements((a as Achievement[]) ?? []);
+    setLoading(false);
+  };
+  useEffect(() => {
+    load();
   }, [user]);
+  useAutoRefresh(load);
 
   const complete = progress.filter((p) => p.status === "complete").length;
 

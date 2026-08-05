@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, Button, Badge } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { CheckCircle2, Circle } from "lucide-react";
 
 const STAGES = [
@@ -40,6 +41,7 @@ function OnboardingPage() {
   useEffect(() => {
     load();
   }, [user]);
+  useAutoRefresh(load);
 
   async function advance() {
     if (!user) return;

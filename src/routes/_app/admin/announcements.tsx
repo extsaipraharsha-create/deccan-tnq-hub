@@ -1,7 +1,9 @@
+/* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader, Card, Button, Textarea, EmptyState } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Megaphone, Save } from "lucide-react";
 
 function AnnouncementsPage() {
@@ -9,6 +11,7 @@ function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const lastLoadedRef = useRef("");
 
   async function load() {
     setLoading(true);
@@ -17,18 +20,25 @@ function AnnouncementsPage() {
       .select("*")
       .eq("key", "announcement")
       .maybeSingle();
-    setText((data?.value as string) ?? "");
+    const v = (data?.value as string) ?? "";
+    lastLoadedRef.current = v;
+    setText(v);
     setLoading(false);
   }
   useEffect(() => {
     load();
   }, []);
+  // Skip auto-refetch while there's an unsaved edit in the textarea.
+  useAutoRefresh(() => {
+    if (text === lastLoadedRef.current) load();
+  });
 
   async function save() {
     setSaving(true);
     await supabase
       .from("settings")
       .upsert({ key: "announcement", value: text }, { onConflict: "key" });
+    lastLoadedRef.current = text;
     setSaving(false);
     setSavedAt(new Date().toLocaleTimeString());
   }

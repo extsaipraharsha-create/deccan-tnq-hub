@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { PageHeader, Card, EmptyState, Input, Select, Badge, Button } from "@/components/tnq/ui";
 import { Shield, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -45,6 +46,7 @@ function UsersPage() {
   useEffect(() => {
     load();
   }, []);
+  useAutoRefresh(load);
 
   const filtered = useMemo(
     () =>
@@ -90,9 +92,9 @@ function UsersPage() {
         title="Admin · Users"
         subtitle={`${rows.length} total · approve pending users, change roles, suspend access`}
       />
-      <Card className="!p-0">
+      <Card className="p-0!">
         <div className="p-4 flex flex-wrap gap-2 border-b border-border">
-          <div className="relative flex-1 min-w-[220px]">
+          <div className="relative flex-1 min-w-55">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={q}

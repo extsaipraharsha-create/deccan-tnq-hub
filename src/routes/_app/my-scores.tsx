@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, EmptyState, Badge } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Target, AlertCircle } from "lucide-react";
 
 interface Score {
@@ -26,26 +27,28 @@ function MyScoresPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = async () => {
     if (!user) return;
-    (async () => {
-      const [{ data: s }, { data: i }] = await Promise.all([
-        supabase
-          .from("quality_scores")
-          .select("*")
-          .eq("contributor_id", user.id)
-          .order("review_date", { ascending: false }),
-        supabase
-          .from("quality_issues")
-          .select("*")
-          .eq("contributor_id", user.id)
-          .order("date", { ascending: false }),
-      ]);
-      setScores((s as Score[]) ?? []);
-      setIssues((i as Issue[]) ?? []);
-      setLoading(false);
-    })();
+    const [{ data: s }, { data: i }] = await Promise.all([
+      supabase
+        .from("quality_scores")
+        .select("*")
+        .eq("contributor_id", user.id)
+        .order("review_date", { ascending: false }),
+      supabase
+        .from("quality_issues")
+        .select("*")
+        .eq("contributor_id", user.id)
+        .order("date", { ascending: false }),
+    ]);
+    setScores((s as Score[]) ?? []);
+    setIssues((i as Issue[]) ?? []);
+    setLoading(false);
+  };
+  useEffect(() => {
+    load();
   }, [user]);
+  useAutoRefresh(load);
 
   const avg = scores.length
     ? (scores.reduce((a, b) => a + Number(b.score), 0) / scores.length).toFixed(1)

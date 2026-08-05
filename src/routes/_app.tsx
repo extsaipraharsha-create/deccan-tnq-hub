@@ -37,7 +37,7 @@ function AppLayout() {
   return (
     <AppShell>
       <Outlet />
-      <GuidedTour enabled={!!session && !!role && role !== "pending"} />
+      <GuidedTour enabled={!!session && !!role} />
     </AppShell>
   );
 }

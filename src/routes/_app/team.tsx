@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, Input, Badge, EmptyState, Button } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Search, Users } from "lucide-react";
 
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
@@ -40,19 +41,21 @@ function TeamPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
 
+  const load = async () => {
+    const [{ data: p }, { data: r }, { data: pr }] = await Promise.all([
+      supabase.from("profiles").select("id,name,email,photo_url"),
+      supabase.from("user_roles").select("user_id,role,status"),
+      supabase.from("projects").select("*"),
+    ]);
+    setProfiles((p as any) ?? []);
+    setRoles((r as any) ?? []);
+    setProjects((pr as any) ?? []);
+    setLoading(false);
+  };
   useEffect(() => {
-    (async () => {
-      const [{ data: p }, { data: r }, { data: pr }] = await Promise.all([
-        supabase.from("profiles").select("id,name,email,photo_url"),
-        supabase.from("user_roles").select("user_id,role,status"),
-        supabase.from("projects").select("*"),
-      ]);
-      setProfiles((p as any) ?? []);
-      setRoles((r as any) ?? []);
-      setProjects((pr as any) ?? []);
-      setLoading(false);
-    })();
+    load();
   }, []);
+  useAutoRefresh(load);
 
   // SME = tnq_team or super_admin
   const smes = useMemo(() => {

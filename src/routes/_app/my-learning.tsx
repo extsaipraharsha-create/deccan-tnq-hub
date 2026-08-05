@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, EmptyState, Badge, Button } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { GraduationCap, Check } from "lucide-react";
 
 interface Path {
@@ -62,6 +63,7 @@ function MyLearningPage() {
   useEffect(() => {
     load();
   }, [user]);
+  useAutoRefresh(load);
 
   async function complete(moduleId: string) {
     if (!user) return;

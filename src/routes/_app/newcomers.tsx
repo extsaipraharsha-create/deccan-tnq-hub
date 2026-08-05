@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import {
   PageHeader,
   Card,
@@ -70,6 +71,7 @@ function NewcomersPage() {
   useEffect(() => {
     load();
   }, []);
+  useAutoRefresh(load);
 
   const rows = useMemo(() => {
     const list = projects.filter((p) => tab === "all" || p.id === tab);

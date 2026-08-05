@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, EmptyState, Badge } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { FolderKanban } from "lucide-react";
 
 interface Proj {
@@ -17,27 +18,30 @@ function MyProjectsPage() {
   const [rows, setRows] = useState<Proj[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = async () => {
     if (!user) return;
-    (async () => {
-      const { data: c } = await supabase
-        .from("contributors")
-        .select("projects")
-        .eq("id", user.id)
-        .maybeSingle();
-      const ids: string[] = (c as any)?.projects ?? [];
-      if (ids.length === 0) {
-        setLoading(false);
-        return;
-      }
-      const { data: p } = await supabase
-        .from("projects")
-        .select("id,name,description,status")
-        .in("id", ids);
-      setRows((p as Proj[]) ?? []);
+    const { data: c } = await supabase
+      .from("contributors")
+      .select("projects")
+      .eq("id", user.id)
+      .maybeSingle();
+    const ids: string[] = (c as any)?.projects ?? [];
+    if (ids.length === 0) {
+      setRows([]);
       setLoading(false);
-    })();
+      return;
+    }
+    const { data: p } = await supabase
+      .from("projects")
+      .select("id,name,description,status")
+      .in("id", ids);
+    setRows((p as Proj[]) ?? []);
+    setLoading(false);
+  };
+  useEffect(() => {
+    load();
   }, [user]);
+  useAutoRefresh(load);
 
   return (
     <div>

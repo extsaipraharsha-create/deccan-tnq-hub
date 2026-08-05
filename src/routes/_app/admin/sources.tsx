@@ -13,6 +13,7 @@ import {
 } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Plus, Trash2, ExternalLink, FolderInput } from "lucide-react";
 
 interface Row {
@@ -63,6 +64,7 @@ function SourcesPage() {
   useEffect(() => {
     load();
   }, []);
+  useAutoRefresh(load);
 
   async function add() {
     if (!form.url.trim()) return;

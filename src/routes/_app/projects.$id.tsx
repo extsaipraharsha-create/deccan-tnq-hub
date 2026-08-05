@@ -5,6 +5,7 @@ import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import {
   Card,
   Badge,
@@ -192,6 +193,11 @@ function ProjectDetail() {
   useEffect(() => {
     load();
   }, [id]);
+  // Skip auto-refetch while the header form is open so it can't clobber
+  // unsaved edits to name/given name mid-type.
+  useAutoRefresh(() => {
+    if (!editHeader) load();
+  });
 
   async function saveHeader() {
     if (!name.trim()) {

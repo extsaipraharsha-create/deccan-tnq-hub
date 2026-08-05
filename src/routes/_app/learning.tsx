@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import {
   PageHeader,
   Card,
@@ -323,7 +325,7 @@ function WorkspacePage() {
     setLoading(true);
     const [{ data: pjs }, { data: pgs }, { data: lps }, { data: pfs }] = await Promise.all([
       supabase.from("projects").select("id,name,audience_type,status").order("name"),
-      supabase
+      (supabase as any)
         .from("playgrounds")
         .select(
           "id,project_id,name,version_number,is_live,live_since,access_url,content_url,dashboard_url,deccanexperts_url,last_updated,last_updated_by,display_order",
@@ -341,6 +343,7 @@ function WorkspacePage() {
   useEffect(() => {
     load();
   }, [user?.id, role]);
+  useAutoRefresh(load);
 
   const profileName = (id: string | null) => {
     if (!id) return "—";
@@ -417,7 +420,7 @@ function WorkspacePage() {
       last_updated: new Date().toISOString(),
       last_updated_by: user?.id ?? null,
     };
-    const { error } = await supabase.from("playgrounds").update(next).eq("id", id);
+    const { error } = await (supabase as any).from("playgrounds").update(next).eq("id", id);
     if (error) {
       toast.error(error.message);
       return;

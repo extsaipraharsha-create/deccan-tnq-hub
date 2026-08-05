@@ -13,6 +13,7 @@ import {
 } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Plus, Trash2, KeyRound } from "lucide-react";
 
 interface Grant {
@@ -55,6 +56,7 @@ function GrantsPage() {
   useEffect(() => {
     load();
   }, []);
+  useAutoRefresh(load);
 
   async function add() {
     if (!form.user_id || !form.resource_id) return;

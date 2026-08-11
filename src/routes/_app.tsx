@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppShell } from "@/components/tnq/AppShell";
 import { GuidedTour } from "@/components/tnq/GuidedTour";
+import { DeadlineEscalationModal } from "@/components/tnq/DeadlineEscalationModal";
 import { useAuth } from "@/lib/tnq/auth-context";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
@@ -38,6 +39,7 @@ function AppLayout() {
     <AppShell>
       <Outlet />
       <GuidedTour enabled={!!session && !!role} />
+      <DeadlineEscalationModal />
     </AppShell>
   );
 }

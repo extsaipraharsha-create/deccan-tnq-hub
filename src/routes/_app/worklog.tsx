@@ -6,8 +6,22 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
 import { Card, Button, Textarea, Select, Input, Badge, EmptyState } from "@/components/tnq/ui";
-import { MessageSquare, Send, Pencil, Trash2, Download, Check, X, Search, Users, List } from "lucide-react";
+import {
+  MessageSquare,
+  Send,
+  Pencil,
+  Trash2,
+  Download,
+  Check,
+  X,
+  Search,
+  Users,
+  List,
+  CheckCircle2,
+  Bell,
+} from "lucide-react";
 import { toast } from "sonner";
 
 type EntryType =
@@ -26,6 +40,7 @@ type Entry = {
   entry_type: EntryType;
   priority: Priority;
   deadline: string | null;
+  completed_at: string | null;
   created_at: string;
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
@@ -146,6 +161,33 @@ function WorkLogPage() {
   const [editDeadline, setEditDeadline] = useState<string>("");
 
   const [groupByPerson, setGroupByPerson] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(false);
+
+  const PUSH_DISMISS_KEY = "tnq_push_reminder_dismissed";
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [enablingPush, setEnablingPush] = useState(false);
+  useEffect(() => {
+    if (!canPost || !isPushSupported()) return;
+    if (Notification.permission !== "default") return;
+    if (localStorage.getItem(PUSH_DISMISS_KEY)) return;
+    setShowPushPrompt(true);
+  }, [canPost]);
+  async function handleEnablePush() {
+    if (!user) return;
+    setEnablingPush(true);
+    try {
+      await enablePushReminders(user.id);
+      toast.success("Deadline reminders enabled");
+      setShowPushPrompt(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't enable push notifications");
+    }
+    setEnablingPush(false);
+  }
+  function dismissPushPrompt() {
+    localStorage.setItem(PUSH_DISMISS_KEY, "1");
+    setShowPushPrompt(false);
+  }
 
   async function load() {
     const [{ data: e }, { data: p }, { data: pr }] = await Promise.all([
@@ -262,6 +304,14 @@ function WorkLogPage() {
     if (error) return toast.error(error.message);
     toast.success("Deleted");
   }
+  async function markComplete(id: string) {
+    const { error } = await supabase
+      .from("work_log_entries")
+      .update({ completed_at: new Date().toISOString() } as any)
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Marked complete");
+  }
 
   // Step 1: filter entries
   const filtered = useMemo(() => {
@@ -277,9 +327,20 @@ function WorkLogPage() {
         const ek = e.created_at.slice(0, 7);
         if (mk !== ek) return false;
       }
+      if (overdueOnly && !(e.deadline && !e.completed_at && isOverdue(e.deadline))) return false;
       return true;
     });
-  }, [entries, filterType, filterPriority, filterUser, filterProject, search, dateMode, dateValue]);
+  }, [
+    entries,
+    filterType,
+    filterPriority,
+    filterUser,
+    filterProject,
+    search,
+    dateMode,
+    dateValue,
+    overdueOnly,
+  ]);
 
   // Step 2: group filtered entries into posting batches, then by (user_id + day).
   type Group = { key: string; user_id: string; day: string; entries: Batch[] };
@@ -374,6 +435,24 @@ function WorkLogPage() {
 
   return (
     <div>
+      {showPushPrompt && (
+        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-3">
+            <Bell className="h-4 w-4 text-primary shrink-0" />
+            <div className="text-sm text-foreground">
+              Get a push reminder 1 hour before your task deadlines — even if the tab's closed.
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={dismissPushPrompt}>
+              Not now
+            </Button>
+            <Button size="sm" onClick={handleEnablePush} disabled={enablingPush}>
+              {enablingPush ? "Enabling…" : "Enable reminders"}
+            </Button>
+          </div>
+        </Card>
+      )}
       {/* Post form */}
       {canPost && (
         <Card className="mb-6">
@@ -563,6 +642,17 @@ function WorkLogPage() {
               className="h-9! text-xs! w-auto!"
             />
           )}
+          {/* Overdue toggle */}
+          <button
+            onClick={() => setOverdueOnly((s) => !s)}
+            className={`inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium rounded-lg border transition-colors ${
+              overdueOnly
+                ? "bg-destructive text-destructive-foreground border-destructive"
+                : "bg-card text-muted-foreground border-border hover:text-foreground"
+            }`}
+          >
+            Overdue only
+          </button>
           {/* Grouping toggle */}
           <button
             onClick={() => setGroupByPerson((s) => !s)}
@@ -678,11 +768,14 @@ function WorkLogPage() {
                                 <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
                                   {e.priority || "P2"}
                                 </Badge>
-                                {e.deadline && (
-                                  <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
-                                    Due {fmtDeadline(e.deadline)}
-                                  </Badge>
-                                )}
+                                {e.deadline &&
+                                  (e.completed_at ? (
+                                    <Badge tone="success">Done</Badge>
+                                  ) : (
+                                    <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                      Due {fmtDeadline(e.deadline)}
+                                    </Badge>
+                                  ))}
                               </>
                             )}
                           </div>
@@ -708,6 +801,15 @@ function WorkLogPage() {
                                 </div>
                               ) : (
                                 <div className="flex gap-1">
+                                  {!e.completed_at && (
+                                    <button
+                                      onClick={() => markComplete(e.id)}
+                                      title="Mark complete"
+                                      className="p-1 text-muted-foreground hover:text-emerald-600"
+                                    >
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => startEdit(e)}
                                     className="p-1 text-muted-foreground hover:text-foreground"
@@ -893,13 +995,19 @@ function WorkLogPage() {
                                         {e.content}
                                       </div>
                                     )}
-                                    {e.deadline && !editing && (
-                                      <div className="mt-1">
-                                        <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
-                                          Due {fmtDeadline(e.deadline)}
-                                        </Badge>
-                                      </div>
-                                    )}
+                                    {e.deadline &&
+                                      !editing &&
+                                      (e.completed_at ? (
+                                        <div className="mt-1">
+                                          <Badge tone="success">Done</Badge>
+                                        </div>
+                                      ) : (
+                                        <div className="mt-1">
+                                          <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                            Due {fmtDeadline(e.deadline)}
+                                          </Badge>
+                                        </div>
+                                      ))}
                                     <div className="mt-1.5 flex items-center justify-between gap-2">
                                       {proj ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
@@ -926,6 +1034,15 @@ function WorkLogPage() {
                                           </div>
                                         ) : (
                                           <div className="flex gap-1">
+                                            {!e.completed_at && (
+                                              <button
+                                                onClick={() => markComplete(e.id)}
+                                                title="Mark complete"
+                                                className="p-1 text-muted-foreground hover:text-emerald-600"
+                                              >
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                              </button>
+                                            )}
                                             <button
                                               onClick={() => startEdit(e)}
                                               className="p-1 text-muted-foreground hover:text-foreground"

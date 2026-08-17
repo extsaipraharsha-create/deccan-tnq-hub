@@ -46,6 +46,15 @@ type Entry = {
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
 type Project = { id: string; name: string; emoji_icon: string | null };
+type DelayLog = {
+  id: string;
+  entry_id: string;
+  old_deadline: string;
+  new_deadline: string;
+  reason: string;
+  explanation: string | null;
+  created_at: string;
+};
 type TaskDraft = {
   content: string;
   projectId: string;
@@ -116,6 +125,27 @@ const PRIORITY_TONE: Record<string, "danger" | "warn" | "default" | "info"> = {
   P3: "info",
 };
 
+function ReasonPanel({ logs }: { logs: DelayLog[] }) {
+  if (logs.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
+      {logs.map((l) => (
+        <div key={l.id} className="text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[10px] font-bold tracking-wider text-foreground uppercase">
+              {l.reason}
+            </span>
+            <span className="text-muted-foreground">
+              — was due {fmtDeadline(l.old_deadline)}, moved to {fmtDeadline(l.new_deadline)}
+            </span>
+          </div>
+          {l.explanation && <div className="mt-1 text-foreground">{l.explanation}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
@@ -156,6 +186,8 @@ function WorkLogPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [delayLogs, setDelayLogs] = useState<DelayLog[]>([]);
+  const [openReasonId, setOpenReasonId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskDraft[]>([blankTask()]);
 
   const [filterType, setFilterType] = useState<"all" | EntryType>("all");
@@ -202,14 +234,19 @@ function WorkLogPage() {
   }
 
   async function load() {
-    const [{ data: e }, { data: p }, { data: pr }] = await Promise.all([
+    const [{ data: e }, { data: p }, { data: pr }, { data: dl }] = await Promise.all([
       supabase.from("work_log_entries").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id,name,email,photo_url"),
       supabase.from("projects").select("id,name,emoji_icon"),
+      (supabase as any)
+        .from("work_log_delay_log")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ]);
     setEntries((e as any) ?? []);
     setProfiles((p as any) ?? []);
     setProjects((pr as any) ?? []);
+    setDelayLogs((dl as DelayLog[]) ?? []);
   }
   useEffect(() => {
     load();
@@ -333,6 +370,9 @@ function WorkLogPage() {
       .eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Marked complete");
+  }
+  function logsFor(entryId: string) {
+    return delayLogs.filter((l) => l.entry_id === entryId);
   }
 
   // Step 1: filter entries
@@ -798,6 +838,19 @@ function WorkLogPage() {
                                       Due {fmtDeadline(e.deadline)}
                                     </Badge>
                                   ))}
+                                {e.deadline_updated_at && (
+                                  <Badge tone="warn">Deadline changed</Badge>
+                                )}
+                                {logsFor(e.id).length > 0 && (
+                                  <button
+                                    onClick={() =>
+                                      setOpenReasonId(openReasonId === e.id ? null : e.id)
+                                    }
+                                    className="text-[11px] font-medium text-primary hover:underline"
+                                  >
+                                    {openReasonId === e.id ? "Hide reason" : "View reason"}
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -864,6 +917,7 @@ function WorkLogPage() {
                             {proj.emoji_icon ?? "📁"} {proj.name}
                           </div>
                         )}
+                        {openReasonId === e.id && <ReasonPanel logs={logsFor(e.id)} />}
                       </div>
                     );
                       })}
@@ -1017,19 +1071,31 @@ function WorkLogPage() {
                                         {e.content}
                                       </div>
                                     )}
-                                    {e.deadline &&
-                                      !editing &&
-                                      (e.completed_at ? (
-                                        <div className="mt-1">
+                                    {e.deadline && !editing && (
+                                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                        {e.completed_at ? (
                                           <Badge tone="success">Done</Badge>
-                                        </div>
-                                      ) : (
-                                        <div className="mt-1">
+                                        ) : (
                                           <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
                                             Due {fmtDeadline(e.deadline)}
                                           </Badge>
-                                        </div>
-                                      ))}
+                                        )}
+                                        {e.deadline_updated_at && (
+                                          <Badge tone="warn">Deadline changed</Badge>
+                                        )}
+                                        {logsFor(e.id).length > 0 && (
+                                          <button
+                                            onClick={() =>
+                                              setOpenReasonId(openReasonId === e.id ? null : e.id)
+                                            }
+                                            className="text-[11px] font-medium text-primary hover:underline"
+                                          >
+                                            {openReasonId === e.id ? "Hide reason" : "View reason"}
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                    {openReasonId === e.id && <ReasonPanel logs={logsFor(e.id)} />}
                                     <div className="mt-1.5 flex items-center justify-between gap-2">
                                       {proj ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">

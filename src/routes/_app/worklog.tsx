@@ -41,6 +41,7 @@ type Entry = {
   priority: Priority;
   deadline: string | null;
   completed_at: string | null;
+  deadline_updated_at: string | null;
   created_at: string;
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
@@ -70,6 +71,17 @@ function groupIntoBatches(entries: Entry[]): Batch[] {
     map.set(k, b);
   }
   return Array.from(map.values());
+}
+
+// A batch's "recency" is the most recent of: when it was posted, or when any
+// item in it had its deadline changed. Used to sort/bucket Worklog so a
+// rescheduled task surfaces as recent instead of staying buried under its
+// original post date.
+function batchRecency(b: Batch): string {
+  return b.items.reduce(
+    (max, e) => (e.deadline_updated_at && e.deadline_updated_at > max ? e.deadline_updated_at : max),
+    b.created_at,
+  );
 }
 
 const TYPES: {
@@ -285,13 +297,23 @@ function WorkLogPage() {
     setEditDeadline(e.deadline ? toDatetimeLocal(e.deadline) : "");
   }
   async function saveEdit(id: string) {
+    const original = entries.find((e) => e.id === id);
+    const newDeadline = editDeadline ? new Date(editDeadline).toISOString() : null;
+    const deadlineChanged = newDeadline !== (original?.deadline ?? null);
     const { error } = await supabase
       .from("work_log_entries")
       .update({
         content: editContent,
         entry_type: editType,
         priority: editPriority,
-        deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
+        deadline: newDeadline,
+        ...(deadlineChanged
+          ? {
+              deadline_updated_at: new Date().toISOString(),
+              reminder_sent_at: null,
+              overdue_notified_at: null,
+            }
+          : {}),
       } as any)
       .eq("id", id);
     if (error) return toast.error(error.message);
@@ -348,7 +370,7 @@ function WorkLogPage() {
     const batches = groupIntoBatches(filtered);
     const map = new Map<string, Group>();
     for (const b of batches) {
-      const d = dayKey(b.created_at);
+      const d = dayKey(batchRecency(b));
       const k = `${b.user_id}|${d}`;
       const g = map.get(k) ?? { key: k, user_id: b.user_id, day: d, entries: [] };
       g.entries.push(b);
@@ -356,7 +378,7 @@ function WorkLogPage() {
     }
     const out: Group[] = [];
     for (const g of map.values()) {
-      g.entries.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      g.entries.sort((a, b) => batchRecency(b).localeCompare(batchRecency(a)));
       out.push(g);
     }
     out.sort((a, b) => (a.day === b.day ? 0 : a.day < b.day ? 1 : -1));
@@ -376,11 +398,11 @@ function WorkLogPage() {
     }
     const out: { user_id: string; batches: Batch[] }[] = [];
     for (const [user_id, bs] of map) {
-      bs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      bs.sort((a, b) => batchRecency(b).localeCompare(batchRecency(a)));
       out.push({ user_id, batches: bs });
     }
     // sort by most recent batch
-    out.sort((a, b) => b.batches[0].created_at.localeCompare(a.batches[0].created_at));
+    out.sort((a, b) => batchRecency(b.batches[0]).localeCompare(batchRecency(a.batches[0])));
     return out;
   }, [filtered]);
 

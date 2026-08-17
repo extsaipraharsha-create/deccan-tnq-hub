@@ -87,7 +87,12 @@ export function DeadlineEscalationModal() {
     }
     const { error } = await supabase
       .from("work_log_entries")
-      .update({ deadline: iso, reminder_sent_at: null, overdue_notified_at: null } as any)
+      .update({
+        deadline: iso,
+        deadline_updated_at: new Date().toISOString(),
+        reminder_sent_at: null,
+        overdue_notified_at: null,
+      } as any)
       .eq("id", current.id);
     setSaving(false);
     if (error) return toast.error(error.message);

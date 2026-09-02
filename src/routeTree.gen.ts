@@ -23,6 +23,7 @@ import { Route as AppProjectsRouteImport } from './routes/_app/projects'
 import { Route as AppOnboardingRouteImport } from './routes/_app/onboarding'
 import { Route as AppNewcomersRouteImport } from './routes/_app/newcomers'
 import { Route as AppMyScoresRouteImport } from './routes/_app/my-scores'
+import { Route as AppMyReportRouteImport } from './routes/_app/my-report'
 import { Route as AppMyProjectsRouteImport } from './routes/_app/my-projects'
 import { Route as AppMyProgressRouteImport } from './routes/_app/my-progress'
 import { Route as AppMyPlaygroundRouteImport } from './routes/_app/my-playground'
@@ -107,6 +108,11 @@ const AppNewcomersRoute = AppNewcomersRouteImport.update({
 const AppMyScoresRoute = AppMyScoresRouteImport.update({
   id: '/my-scores',
   path: '/my-scores',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyReportRoute = AppMyReportRouteImport.update({
+  id: '/my-report',
+  path: '/my-report',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyProjectsRoute = AppMyProjectsRouteImport.update({
@@ -204,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/my-playground': typeof AppMyPlaygroundRoute
   '/my-progress': typeof AppMyProgressRoute
   '/my-projects': typeof AppMyProjectsRoute
+  '/my-report': typeof AppMyReportRoute
   '/my-scores': typeof AppMyScoresRoute
   '/newcomers': typeof AppNewcomersRoute
   '/onboarding': typeof AppOnboardingRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByTo {
   '/my-playground': typeof AppMyPlaygroundRoute
   '/my-progress': typeof AppMyProgressRoute
   '/my-projects': typeof AppMyProjectsRoute
+  '/my-report': typeof AppMyReportRoute
   '/my-scores': typeof AppMyScoresRoute
   '/newcomers': typeof AppNewcomersRoute
   '/onboarding': typeof AppOnboardingRoute
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/_app/my-playground': typeof AppMyPlaygroundRoute
   '/_app/my-progress': typeof AppMyProgressRoute
   '/_app/my-projects': typeof AppMyProjectsRoute
+  '/_app/my-report': typeof AppMyReportRoute
   '/_app/my-scores': typeof AppMyScoresRoute
   '/_app/newcomers': typeof AppNewcomersRoute
   '/_app/onboarding': typeof AppOnboardingRoute
@@ -301,6 +310,7 @@ export interface FileRouteTypes {
     | '/my-playground'
     | '/my-progress'
     | '/my-projects'
+    | '/my-report'
     | '/my-scores'
     | '/newcomers'
     | '/onboarding'
@@ -332,6 +342,7 @@ export interface FileRouteTypes {
     | '/my-playground'
     | '/my-progress'
     | '/my-projects'
+    | '/my-report'
     | '/my-scores'
     | '/newcomers'
     | '/onboarding'
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
     | '/_app/my-playground'
     | '/_app/my-progress'
     | '/_app/my-projects'
+    | '/_app/my-report'
     | '/_app/my-scores'
     | '/_app/newcomers'
     | '/_app/onboarding'
@@ -489,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/my-scores'
       fullPath: '/my-scores'
       preLoaderRoute: typeof AppMyScoresRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-report': {
+      id: '/_app/my-report'
+      path: '/my-report'
+      fullPath: '/my-report'
+      preLoaderRoute: typeof AppMyReportRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-projects': {
@@ -627,6 +646,7 @@ interface AppRouteChildren {
   AppMyPlaygroundRoute: typeof AppMyPlaygroundRoute
   AppMyProgressRoute: typeof AppMyProgressRoute
   AppMyProjectsRoute: typeof AppMyProjectsRoute
+  AppMyReportRoute: typeof AppMyReportRoute
   AppMyScoresRoute: typeof AppMyScoresRoute
   AppNewcomersRoute: typeof AppNewcomersRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
@@ -653,6 +673,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMyPlaygroundRoute: AppMyPlaygroundRoute,
   AppMyProgressRoute: AppMyProgressRoute,
   AppMyProjectsRoute: AppMyProjectsRoute,
+  AppMyReportRoute: AppMyReportRoute,
   AppMyScoresRoute: AppMyScoresRoute,
   AppNewcomersRoute: AppNewcomersRoute,
   AppOnboardingRoute: AppOnboardingRoute,

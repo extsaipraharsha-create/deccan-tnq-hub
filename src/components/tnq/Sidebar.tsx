@@ -25,6 +25,7 @@ import {
   MessageSquare,
   GraduationCap,
   Trophy,
+  FileBarChart,
 } from "lucide-react";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { ROLE_LABEL, ROLE_ACCENT } from "@/lib/tnq/constants";
@@ -67,6 +68,7 @@ const NAV: Record<AppRole, NavSection[]> = {
       items: [
         { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
         { label: "Work Log", to: "/worklog", icon: MessageSquare },
+        { label: "My Report", to: "/my-report", icon: FileBarChart },
       ],
     },
     {
@@ -100,6 +102,7 @@ const NAV: Record<AppRole, NavSection[]> = {
       items: [
         { label: "All Projects", to: "/projects", icon: FolderKanban },
         { label: "Work Log", to: "/worklog", icon: MessageSquare },
+        { label: "My Report", to: "/my-report", icon: FileBarChart },
         { label: "Workspace", to: "/learning", icon: BookOpen },
         { label: "Quality Overview", to: "/quality", icon: ClipboardCheck },
         { label: "Newcomers", to: "/newcomers", icon: GraduationCap },

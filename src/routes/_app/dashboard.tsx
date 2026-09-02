@@ -46,14 +46,14 @@ function Dashboard() {
       {role === "tnq_team" && <SmeDash dose={dose} />}
       {role === "super_admin" && <AdminDash dose={dose} />}
       <QualityByProject role={role} />
-      <WallOfExcellence role={role} />
     </div>
   );
 }
 
 /* ------------ WALL OF EXCELLENCE (all roles) ------------ */
 type Recognition = { id: string; contributor_id: string; given_by: string; message: string; created_at: string };
-function WallOfExcellence({ role }: { role: string | null }) {
+function WallOfExcellence() {
+  const { role } = useAuth();
   const [items, setItems] = useState<Recognition[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string | null }[]>(
     [],
@@ -351,6 +351,8 @@ function ContributorDash({ dose }: { dose: string }) {
         <StatCard label="Projects" value={stats.projectCount} suffix="assigned" />
       </div>
 
+      <WallOfExcellence />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
@@ -465,6 +467,8 @@ function SmeDash({ dose }: { dose: string }) {
         <StatCard label="Open Issues This Week" value={stats.openIssuesThisWeek} />
         <StatCard label="Contributors" value={stats.contributors} suffix="assigned" />
       </div>
+
+      <WallOfExcellence />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
@@ -593,6 +597,8 @@ function AdminDash({ dose }: { dose: string }) {
         <StatCard label="Open issues" value={stats.openIssues} />
         <StatCard label="Pending users" value={stats.pending} />
       </div>
+
+      <WallOfExcellence />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card>

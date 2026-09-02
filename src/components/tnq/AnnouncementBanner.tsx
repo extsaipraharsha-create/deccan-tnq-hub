@@ -17,6 +17,7 @@ export function AnnouncementBanner() {
       .from("settings")
       .select("value")
       .eq("key", "announcement")
+      .limit(1)
       .maybeSingle();
     setText((data?.value as string) ?? null);
   }

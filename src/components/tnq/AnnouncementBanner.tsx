@@ -29,18 +29,22 @@ export function AnnouncementBanner() {
   if (typeof window !== "undefined" && localStorage.getItem(DISMISS_KEY) === text) return null;
 
   return (
-    <div className="flex items-start gap-3 bg-primary/10 border-b border-primary/20 px-5 py-2.5 lg:px-8">
-      <Megaphone className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-      <p className="flex-1 text-sm text-foreground whitespace-pre-wrap">{text}</p>
-      <button
-        onClick={() => {
-          localStorage.setItem(DISMISS_KEY, text);
-          setText(null);
-        }}
-        className="text-muted-foreground hover:text-foreground shrink-0"
-      >
-        <X className="h-4 w-4" />
-      </button>
+    <div className="px-5 pt-5 lg:px-8">
+      <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 pl-4 pr-3 py-3 shadow-soft border-l-4 border-l-primary">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15">
+          <Megaphone className="h-4 w-4 text-primary" />
+        </div>
+        <p className="flex-1 text-sm text-foreground whitespace-pre-wrap leading-relaxed">{text}</p>
+        <button
+          onClick={() => {
+            localStorage.setItem(DISMISS_KEY, text);
+            setText(null);
+          }}
+          className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

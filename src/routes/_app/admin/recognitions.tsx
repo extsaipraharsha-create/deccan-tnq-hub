@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { PageHeader, Card, Button, Textarea, Select, Field, Modal, EmptyState } from "@/components/tnq/ui";
+import { PageHeader, Card, Button, Textarea, Field, Modal, EmptyState } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -37,7 +37,10 @@ function RecognitionsPage() {
   const [profiles, setProfiles] = useState<Prof[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ contributor_id: "", message: "" });
+  const [form, setForm] = useState<{ contributor_ids: string[]; message: string }>({
+    contributor_ids: [],
+    message: "",
+  });
 
   async function load() {
     setLoading(true);
@@ -57,20 +60,38 @@ function RecognitionsPage() {
   }, []);
   useAutoRefresh(load);
 
+  function toggleContributor(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      contributor_ids: prev.contributor_ids.includes(id)
+        ? prev.contributor_ids.filter((x) => x !== id)
+        : [...prev.contributor_ids, id],
+    }));
+  }
   async function add() {
-    if (!form.contributor_id || !form.message.trim()) {
-      toast.error("Pick a person and write a message");
+    if (form.contributor_ids.length === 0 || !form.message.trim()) {
+      toast.error("Pick at least one person and write a message");
       return;
     }
-    const { error } = await (supabase as any).from("recognitions").insert({
-      contributor_id: form.contributor_id,
-      given_by: user?.id,
-      message: form.message.trim(),
-    });
+    // One row per person so each gets their own card on the wall — all
+    // share the same message/timestamp since they came from one submission.
+    const { error } = await (supabase as any)
+      .from("recognitions")
+      .insert(
+        form.contributor_ids.map((contributor_id) => ({
+          contributor_id,
+          given_by: user?.id,
+          message: form.message.trim(),
+        })),
+      );
     if (error) return toast.error(error.message);
     setOpen(false);
-    setForm({ contributor_id: "", message: "" });
-    toast.success("Posted to Wall of Excellence");
+    setForm({ contributor_ids: [], message: "" });
+    toast.success(
+      form.contributor_ids.length > 1
+        ? `Posted to Wall of Excellence for ${form.contributor_ids.length} people`
+        : "Posted to Wall of Excellence",
+    );
     load();
   }
   async function remove(id: string) {
@@ -141,18 +162,30 @@ function RecognitionsPage() {
           </>
         }
       >
-        <Field label="Person">
-          <Select
-            value={form.contributor_id}
-            onChange={(e) => setForm({ ...form, contributor_id: e.target.value })}
-          >
-            <option value="">Select person…</option>
+        <Field
+          label="People"
+          hint={
+            form.contributor_ids.length > 0
+              ? `${form.contributor_ids.length} selected`
+              : "Pick one or more — everyone selected gets this message."
+          }
+        >
+          <div className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border">
             {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
+              <label
+                key={p.id}
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-accent"
+              >
+                <input
+                  type="checkbox"
+                  checked={form.contributor_ids.includes(p.id)}
+                  onChange={() => toggleContributor(p.id)}
+                  className="h-4 w-4 rounded border-border"
+                />
                 {p.name ?? p.email}
-              </option>
+              </label>
             ))}
-          </Select>
+          </div>
         </Field>
         <Field label="Message">
           <Textarea

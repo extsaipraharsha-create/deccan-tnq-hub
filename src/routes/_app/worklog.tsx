@@ -3,12 +3,13 @@
 /* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
+import { WorklogReport } from "@/components/tnq/WorklogReport";
 import { Card, Button, Textarea, Select, Input, Badge, EmptyState, Modal } from "@/components/tnq/ui";
 import {
   MessageSquare,
@@ -24,6 +25,9 @@ import {
   LayoutGrid,
   CheckCircle2,
   Bell,
+  ChevronDown,
+  Zap,
+  FileBarChart,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -298,9 +302,14 @@ function WorkLogPage() {
   const [editPriority, setEditPriority] = useState<Priority>("P2");
   const [editDeadline, setEditDeadline] = useState<string>("");
 
-  const [viewMode, setViewMode] = useState<"feed" | "board" | "person">("feed");
+  const [viewMode, setViewMode] = useState<"feed" | "board" | "person" | "team">("feed");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
+
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [rosterProjectFilter, setRosterProjectFilter] = useState("");
+  const [expandedRosterId, setExpandedRosterId] = useState<string | null>(null);
+  const [reportUserId, setReportUserId] = useState<string | null>(null);
 
   const PUSH_DISMISS_KEY = "tnq_push_reminder_dismissed";
   const [showPushPrompt, setShowPushPrompt] = useState(false);
@@ -510,6 +519,13 @@ function WorkLogPage() {
     const { error } = await (supabase as any).from("work_log_comments").delete().eq("id", id);
     if (error) toast.error(error.message);
   }
+  async function sendNudge(entryId: string, toUser: string) {
+    const { error } = await (supabase as any)
+      .from("work_log_nudges")
+      .insert({ entry_id: entryId, from_user: user?.id, to_user: toUser });
+    if (error) return toast.error(error.message);
+    toast.success("Nudge sent");
+  }
 
   // Step 1: filter entries
   const filtered = useMemo(() => {
@@ -594,6 +610,77 @@ function WorkLogPage() {
     }
     return map;
   }, [filtered]);
+
+  // Team Roster: every worklog author except the viewer themself — generic
+  // by "has entries", not filtered by role, so it keeps working unchanged
+  // once contributor accounts exist. Built from the already-fetched
+  // `entries` (not the entry-level `filtered`), since the roster has its
+  // own search/project filter below.
+  type RosterPerson = {
+    userId: string;
+    entries: Entry[];
+    openEntries: Entry[];
+    status: "blocked" | "active" | "quiet";
+    blockedCount: number;
+    quietDays: number;
+    heatmap: { day: string; count: number }[];
+  };
+  const roster: RosterPerson[] = useMemo(() => {
+    const byUser = new Map<string, Entry[]>();
+    for (const e of entries) {
+      if (e.user_id === user?.id) continue;
+      const arr = byUser.get(e.user_id) ?? [];
+      arr.push(e);
+      byUser.set(e.user_id, arr);
+    }
+    const today = new Date();
+    const todayKey = dayKey(today.toISOString());
+    const out: RosterPerson[] = [];
+    for (const [userId, userEntries] of byUser) {
+      const openEntries = userEntries.filter((e) => !e.completed_at);
+      const hasBlocked = openEntries.some((e) => e.entry_type === "blocked");
+      const hasToday = userEntries.some((e) => dayKey(e.created_at) === todayKey);
+      const sorted = [...userEntries].sort((a, b) => b.created_at.localeCompare(a.created_at));
+      const lastDate = sorted[0] ? new Date(sorted[0].created_at) : null;
+      const quietDays = lastDate
+        ? Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
+        : 999;
+      const status: RosterPerson["status"] = hasBlocked ? "blocked" : hasToday ? "active" : "quiet";
+      const heatmap: { day: string; count: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = dayKey(d.toISOString());
+        heatmap.push({ day: key, count: userEntries.filter((e) => dayKey(e.created_at) === key).length });
+      }
+      out.push({
+        userId,
+        entries: userEntries,
+        openEntries,
+        status,
+        blockedCount: userEntries.filter((e) => e.entry_type === "blocked").length,
+        quietDays,
+        heatmap,
+      });
+    }
+    out.sort((a, b) => a.status.localeCompare(b.status));
+    return out;
+  }, [entries, user?.id]);
+
+  const filteredRoster = useMemo(() => {
+    const q = rosterSearch.trim().toLowerCase();
+    return roster.filter((p) => {
+      if (q) {
+        const prof = profiles.find((x) => x.id === p.userId);
+        const name = (prof?.name ?? prof?.email ?? "").toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      if (rosterProjectFilter && !p.entries.some((e) => e.project_id === rosterProjectFilter)) {
+        return false;
+      }
+      return true;
+    });
+  }, [roster, rosterSearch, rosterProjectFilter, profiles]);
 
   function exportCsv() {
     const header = [
@@ -878,6 +965,9 @@ function WorkLogPage() {
             { key: "feed" as const, label: "Feed", icon: List },
             { key: "board" as const, label: "Board", icon: LayoutGrid },
             { key: "person" as const, label: "Grouped by Person", icon: Users },
+            ...(canPost
+              ? [{ key: "team" as const, label: "Team", icon: FileBarChart }]
+              : []),
           ] as const
         ).map((v) => (
           <button
@@ -895,7 +985,187 @@ function WorkLogPage() {
       </div>
 
       {/* Content */}
-      {filtered.length === 0 ? (
+      {viewMode === "team" ? (
+        /* ========== TEAM ROSTER VIEW ========== */
+        <div>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={rosterSearch}
+                onChange={(e) => setRosterSearch(e.target.value)}
+                placeholder="Search by name…"
+                className="w-56 pl-8"
+              />
+            </div>
+            <Select
+              value={rosterProjectFilter}
+              onChange={(e) => setRosterProjectFilter(e.target.value)}
+              className="w-auto! h-9! text-xs!"
+            >
+              <option value="">All projects</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {filteredRoster.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<Users className="h-10 w-10" />}
+                title="No one else here yet"
+                subtitle="Once teammates post updates, they'll show up here."
+              />
+            </Card>
+          ) : (
+            <Card className="p-0! overflow-hidden">
+              {filteredRoster.map((p) => {
+                const prof = profiles.find((x) => x.id === p.userId);
+                const expanded = expandedRosterId === p.userId;
+                const statusBadge =
+                  p.status === "blocked" ? (
+                    <Badge tone="danger">Blocked</Badge>
+                  ) : p.status === "active" ? (
+                    <Badge tone="success">Active today</Badge>
+                  ) : (
+                    <Badge tone="default">No update today</Badge>
+                  );
+                return (
+                  <div key={p.userId} className="border-b border-border last:border-0">
+                    <button
+                      onClick={() => setExpandedRosterId(expanded ? null : p.userId)}
+                      className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-accent/30 transition-colors"
+                    >
+                      {prof?.photo_url ? (
+                        <img src={prof.photo_url} alt="" className="h-8 w-8 rounded-full shrink-0" />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0">
+                          {(prof?.name ?? prof?.email ?? "?")[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate">
+                          {prof?.name ?? prof?.email ?? "—"}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                          {p.heatmap.map((h) => (
+                            <div
+                              key={h.day}
+                              title={`${h.day}: ${h.count} update${h.count === 1 ? "" : "s"}`}
+                              className={`h-3.5 w-2 rounded-sm ${h.count > 0 ? "bg-primary" : "bg-muted"}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {statusBadge}
+                        {p.quietDays >= 3 && <Badge tone="warn">Quiet {p.quietDays}+ days</Badge>}
+                        <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+                          {p.openEntries.length} active
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+                        />
+                      </div>
+                    </button>
+                    <AnimatePresence>
+                      {expanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-5 pb-4 space-y-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setReportUserId(p.userId)}
+                            >
+                              <FileBarChart className="h-3.5 w-3.5" /> View report
+                            </Button>
+                            {p.openEntries.length === 0 ? (
+                              <div className="text-xs text-muted-foreground pt-1">
+                                No open entries.
+                              </div>
+                            ) : (
+                              p.openEntries.map((e) => {
+                                const proj = projects.find((x) => x.id === e.project_id);
+                                const entryComments = commentsFor(e.id);
+                                return (
+                                  <div key={e.id} className="rounded-lg border border-border p-3">
+                                    <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                      <Badge tone={TYPE_TONE[e.entry_type]}>
+                                        {TYPE_LABEL[e.entry_type]}
+                                      </Badge>
+                                      <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
+                                        {e.priority || "P2"}
+                                      </Badge>
+                                      {e.deadline && (
+                                        <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                          Due {fmtDeadline(e.deadline)}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="text-sm text-foreground whitespace-pre-wrap">
+                                      {e.content}
+                                    </div>
+                                    {proj && (
+                                      <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
+                                        {proj.emoji_icon ?? "📁"} {proj.name}
+                                      </div>
+                                    )}
+                                    <div className="mt-2 flex items-center gap-1">
+                                      <button
+                                        onClick={() =>
+                                          setOpenCommentId(openCommentId === e.id ? null : e.id)
+                                        }
+                                        className={`inline-flex items-center gap-1 p-1 text-xs ${openCommentId === e.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                                      >
+                                        <MessageSquare className="h-3.5 w-3.5" />
+                                        {entryComments.length > 0 && (
+                                          <span className="font-mono text-[10px]">
+                                            {entryComments.length}
+                                          </span>
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => sendNudge(e.id, p.userId)}
+                                        title="Nudge"
+                                        className="p-1 text-muted-foreground hover:text-primary"
+                                      >
+                                        <Zap className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                    {openCommentId === e.id && (
+                                      <CommentPanel
+                                        comments={entryComments}
+                                        profiles={profiles}
+                                        currentUserId={user?.id}
+                                        isAdmin={isAdmin}
+                                        canComment={isAdmin || role === "tnq_team"}
+                                        onAdd={(body) => addComment(e.id, body)}
+                                        onDelete={deleteComment}
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+        </div>
+      ) : filtered.length === 0 ? (
         <Card>
           <EmptyState
             icon={<MessageSquare className="h-10 w-10" />}
@@ -1551,6 +1821,22 @@ function WorkLogPage() {
             </div>
           </>
         )}
+      </Modal>
+
+      {/* Team Roster "View report" modal */}
+      <Modal
+        open={!!reportUserId}
+        onClose={() => setReportUserId(null)}
+        title={
+          reportUserId
+            ? (() => {
+                const p = profiles.find((x) => x.id === reportUserId);
+                return `${p?.name ?? p?.email ?? "Report"}'s report`;
+              })()
+            : "Report"
+        }
+      >
+        {reportUserId && <WorklogReport userId={reportUserId} />}
       </Modal>
     </div>
   );

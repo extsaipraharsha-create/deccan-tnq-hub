@@ -49,6 +49,7 @@ type Entry = {
 };
 type Profile = { id: string; name: string | null; email: string | null; photo_url: string | null };
 type Project = { id: string; name: string; emoji_icon: string | null };
+type Comment = { id: string; entry_id: string; author_id: string; body: string; created_at: string };
 type DelayLog = {
   id: string;
   entry_id: string;
@@ -160,6 +161,83 @@ function ReasonPanel({ logs }: { logs: DelayLog[] }) {
   );
 }
 
+function CommentPanel({
+  comments,
+  profiles,
+  currentUserId,
+  isAdmin,
+  canComment,
+  onAdd,
+  onDelete,
+}: {
+  comments: Comment[];
+  profiles: Profile[];
+  currentUserId: string | undefined;
+  isAdmin: boolean;
+  canComment: boolean;
+  onAdd: (body: string) => Promise<void>;
+  onDelete: (id: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const who = (id: string) => {
+    const p = profiles.find((x) => x.id === id);
+    return p?.name ?? p?.email ?? "—";
+  };
+  async function submit() {
+    if (!text.trim() || posting) return;
+    setPosting(true);
+    await onAdd(text.trim());
+    setText("");
+    setPosting(false);
+  }
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
+      {comments.length === 0 ? (
+        <div className="text-xs text-muted-foreground">No comments yet.</div>
+      ) : (
+        comments.map((c) => (
+          <div key={c.id} className="text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-foreground">{who(c.author_id)}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {fmtTime(c.created_at)}
+                </span>
+                {(c.author_id === currentUserId || isAdmin) && (
+                  <button
+                    onClick={() => onDelete(c.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="mt-0.5 text-foreground whitespace-pre-wrap">{c.body}</div>
+          </div>
+        ))
+      )}
+      {canComment && (
+        <div className="flex items-center gap-2 pt-1">
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            placeholder="Add a comment…"
+            className="h-8 text-xs"
+          />
+          <Button size="sm" onClick={submit} disabled={posting || !text.trim()}>
+            Send
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
@@ -202,6 +280,8 @@ function WorkLogPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [delayLogs, setDelayLogs] = useState<DelayLog[]>([]);
   const [openReasonId, setOpenReasonId] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskDraft[]>([blankTask()]);
 
   const [filterType, setFilterType] = useState<"all" | EntryType>("all");
@@ -249,7 +329,7 @@ function WorkLogPage() {
   }
 
   async function load() {
-    const [{ data: e }, { data: p }, { data: pr }, { data: dl }] = await Promise.all([
+    const [{ data: e }, { data: p }, { data: pr }, { data: dl }, { data: cm }] = await Promise.all([
       supabase.from("work_log_entries").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id,name,email,photo_url"),
       supabase.from("projects").select("id,name,emoji_icon"),
@@ -257,11 +337,16 @@ function WorkLogPage() {
         .from("work_log_delay_log")
         .select("*")
         .order("created_at", { ascending: false }),
+      (supabase as any)
+        .from("work_log_comments")
+        .select("*")
+        .order("created_at", { ascending: true }),
     ]);
     setEntries((e as any) ?? []);
     setProfiles((p as any) ?? []);
     setProjects((pr as any) ?? []);
     setDelayLogs((dl as DelayLog[]) ?? []);
+    setComments((cm as Comment[]) ?? []);
   }
   useEffect(() => {
     load();
@@ -289,6 +374,29 @@ function WorkLogPage() {
           }
           if (payload.eventType === "DELETE") {
             setEntries((prev) => prev.filter((e) => e.id !== payload.old.id));
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, []);
+
+  // Realtime for comments — so a reply/new comment shows up for whoever's
+  // looking at that entry without waiting on the poll.
+  useEffect(() => {
+    const ch = supabase
+      .channel("worklog-comments-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "work_log_comments" },
+        (payload: any) => {
+          if (payload.eventType === "INSERT") {
+            setComments((prev) => [...prev, payload.new as Comment]);
+          }
+          if (payload.eventType === "DELETE") {
+            setComments((prev) => prev.filter((c) => c.id !== payload.old.id));
           }
         },
       )
@@ -388,6 +496,19 @@ function WorkLogPage() {
   }
   function logsFor(entryId: string) {
     return delayLogs.filter((l) => l.entry_id === entryId);
+  }
+  function commentsFor(entryId: string) {
+    return comments.filter((c) => c.entry_id === entryId);
+  }
+  async function addComment(entryId: string, body: string) {
+    const { error } = await (supabase as any)
+      .from("work_log_comments")
+      .insert({ entry_id: entryId, author_id: user?.id, body });
+    if (error) toast.error(error.message);
+  }
+  async function deleteComment(id: string) {
+    const { error } = await (supabase as any).from("work_log_comments").delete().eq("id", id);
+    if (error) toast.error(error.message);
   }
 
   // Step 1: filter entries
@@ -879,7 +1000,10 @@ function WorkLogPage() {
                     <div key={batch.key}>
                       {batch.items.map((e, itemIdx) => {
                     const proj = projects.find((p) => p.id === e.project_id);
-                    const editable = isAdmin || e.user_id === user?.id;
+                    const isOwn = e.user_id === user?.id;
+                    const canModerate = isAdmin;
+                    const canComment = isAdmin || role === "tnq_team" || isOwn;
+                    const entryComments = commentsFor(e.id);
                     const editing = editId === e.id;
                     return (
                       <div
@@ -956,47 +1080,66 @@ function WorkLogPage() {
                             <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
                               {fmtTime(e.created_at)}
                             </span>
-                            {editable &&
-                              (editing ? (
-                                <div className="flex gap-1">
+                            {editing ? (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => saveEdit(e.id)}
+                                  className="p-1 text-emerald-600 hover:text-emerald-700"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditId(null)}
+                                  className="p-1 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1">
+                                {(isOwn || canModerate) && !e.completed_at && (
                                   <button
-                                    onClick={() => saveEdit(e.id)}
-                                    className="p-1 text-emerald-600 hover:text-emerald-700"
+                                    onClick={() => markComplete(e.id)}
+                                    title="Mark complete"
+                                    className="p-1 text-muted-foreground hover:text-emerald-600"
                                   >
-                                    <Check className="h-3.5 w-3.5" />
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
                                   </button>
+                                )}
+                                {(canComment || entryComments.length > 0) && (
                                   <button
-                                    onClick={() => setEditId(null)}
-                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                    onClick={() =>
+                                      setOpenCommentId(openCommentId === e.id ? null : e.id)
+                                    }
+                                    title="Comments"
+                                    className={`p-1 flex items-center gap-0.5 ${openCommentId === e.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
                                   >
-                                    <X className="h-3.5 w-3.5" />
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                    {entryComments.length > 0 && (
+                                      <span className="font-mono text-[10px]">
+                                        {entryComments.length}
+                                      </span>
+                                    )}
                                   </button>
-                                </div>
-                              ) : (
-                                <div className="flex gap-1">
-                                  {!e.completed_at && (
-                                    <button
-                                      onClick={() => markComplete(e.id)}
-                                      title="Mark complete"
-                                      className="p-1 text-muted-foreground hover:text-emerald-600"
-                                    >
-                                      <CheckCircle2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
+                                )}
+                                {isOwn && (
                                   <button
                                     onClick={() => startEdit(e)}
                                     className="p-1 text-muted-foreground hover:text-foreground"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </button>
+                                )}
+                                {(isOwn || canModerate) && (
                                   <button
                                     onClick={() => remove(e.id)}
                                     className="p-1 text-muted-foreground hover:text-destructive"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
-                                </div>
-                              ))}
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         {editing ? (
@@ -1017,6 +1160,17 @@ function WorkLogPage() {
                           </div>
                         )}
                         {openReasonId === e.id && <ReasonPanel logs={logsFor(e.id)} />}
+                        {openCommentId === e.id && (
+                          <CommentPanel
+                            comments={entryComments}
+                            profiles={profiles}
+                            currentUserId={user?.id}
+                            isAdmin={isAdmin}
+                            canComment={canComment}
+                            onAdd={(body) => addComment(e.id, body)}
+                            onDelete={deleteComment}
+                          />
+                        )}
                       </div>
                     );
                       })}
@@ -1095,7 +1249,10 @@ function WorkLogPage() {
                             <div className="space-y-2">
                               {b.items.map((e, itemIdx) => {
                                 const proj = projects.find((p) => p.id === e.project_id);
-                                const editable = isAdmin || e.user_id === user?.id;
+                                const isOwn = e.user_id === user?.id;
+                                const canModerate = isAdmin;
+                                const canComment = isAdmin || role === "tnq_team" || isOwn;
+                                const entryComments = commentsFor(e.id);
                                 const editing = editId === e.id;
                                 return (
                                   <div
@@ -1196,6 +1353,17 @@ function WorkLogPage() {
                                       </div>
                                     )}
                                     {openReasonId === e.id && <ReasonPanel logs={logsFor(e.id)} />}
+                                    {openCommentId === e.id && (
+                                      <CommentPanel
+                                        comments={entryComments}
+                                        profiles={profiles}
+                                        currentUserId={user?.id}
+                                        isAdmin={isAdmin}
+                                        canComment={canComment}
+                                        onAdd={(body) => addComment(e.id, body)}
+                                        onDelete={deleteComment}
+                                      />
+                                    )}
                                     <div className="mt-1.5 flex items-center justify-between gap-2">
                                       {proj ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
@@ -1204,47 +1372,66 @@ function WorkLogPage() {
                                       ) : (
                                         <span className="text-[11px] text-muted-foreground">—</span>
                                       )}
-                                      {editable &&
-                                        (editing ? (
-                                          <div className="flex gap-1">
+                                      {editing ? (
+                                        <div className="flex gap-1">
+                                          <button
+                                            onClick={() => saveEdit(e.id)}
+                                            className="p-1 text-emerald-600 hover:text-emerald-700"
+                                          >
+                                            <Check className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => setEditId(null)}
+                                            className="p-1 text-muted-foreground hover:text-foreground"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex gap-1">
+                                          {(isOwn || canModerate) && !e.completed_at && (
                                             <button
-                                              onClick={() => saveEdit(e.id)}
-                                              className="p-1 text-emerald-600 hover:text-emerald-700"
+                                              onClick={() => markComplete(e.id)}
+                                              title="Mark complete"
+                                              className="p-1 text-muted-foreground hover:text-emerald-600"
                                             >
-                                              <Check className="h-3.5 w-3.5" />
+                                              <CheckCircle2 className="h-3.5 w-3.5" />
                                             </button>
+                                          )}
+                                          {(canComment || entryComments.length > 0) && (
                                             <button
-                                              onClick={() => setEditId(null)}
-                                              className="p-1 text-muted-foreground hover:text-foreground"
+                                              onClick={() =>
+                                                setOpenCommentId(openCommentId === e.id ? null : e.id)
+                                              }
+                                              title="Comments"
+                                              className={`p-1 flex items-center gap-0.5 ${openCommentId === e.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
                                             >
-                                              <X className="h-3.5 w-3.5" />
+                                              <MessageSquare className="h-3.5 w-3.5" />
+                                              {entryComments.length > 0 && (
+                                                <span className="font-mono text-[10px]">
+                                                  {entryComments.length}
+                                                </span>
+                                              )}
                                             </button>
-                                          </div>
-                                        ) : (
-                                          <div className="flex gap-1">
-                                            {!e.completed_at && (
-                                              <button
-                                                onClick={() => markComplete(e.id)}
-                                                title="Mark complete"
-                                                className="p-1 text-muted-foreground hover:text-emerald-600"
-                                              >
-                                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                              </button>
-                                            )}
+                                          )}
+                                          {isOwn && (
                                             <button
                                               onClick={() => startEdit(e)}
                                               className="p-1 text-muted-foreground hover:text-foreground"
                                             >
                                               <Pencil className="h-3.5 w-3.5" />
                                             </button>
+                                          )}
+                                          {(isOwn || canModerate) && (
                                             <button
                                               onClick={() => remove(e.id)}
                                               className="p-1 text-muted-foreground hover:text-destructive"
                                             >
                                               <Trash2 className="h-3.5 w-3.5" />
                                             </button>
-                                          </div>
-                                        ))}
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -1346,6 +1533,22 @@ function WorkLogPage() {
               ) : null;
             })()}
             <ReasonPanel logs={logsFor(detailEntry.id)} />
+            <div>
+              <div className="font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase mb-1.5">
+                Comments
+              </div>
+              <CommentPanel
+                comments={commentsFor(detailEntry.id)}
+                profiles={profiles}
+                currentUserId={user?.id}
+                isAdmin={isAdmin}
+                canComment={
+                  isAdmin || role === "tnq_team" || detailEntry.user_id === user?.id
+                }
+                onAdd={(body) => addComment(detailEntry.id, body)}
+                onDelete={deleteComment}
+              />
+            </div>
           </>
         )}
       </Modal>

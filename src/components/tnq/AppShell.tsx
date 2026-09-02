@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { AnnouncementBanner } from "./AnnouncementBanner";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
+        <AnnouncementBanner />
         <motion.main
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}

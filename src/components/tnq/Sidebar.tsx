@@ -24,6 +24,7 @@ import {
   Diamond,
   MessageSquare,
   GraduationCap,
+  Trophy,
 } from "lucide-react";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { ROLE_LABEL, ROLE_ACCENT } from "@/lib/tnq/constants";
@@ -130,6 +131,7 @@ const ADMIN_SUB: NavItem[] = [
   { label: "Users & Roles", to: "/admin/users", icon: Shield },
   { label: "Resource Grants", to: "/admin/grants", icon: FileText },
   { label: "Announcements", to: "/admin/announcements", icon: Megaphone },
+  { label: "Wall of Excellence", to: "/admin/recognitions", icon: Trophy },
   { label: "Sources", to: "/admin/sources", icon: Lock },
   { label: "Audit Log", to: "/admin/audit", icon: ScrollText },
   { label: "Settings", to: "/admin/settings", icon: Settings },

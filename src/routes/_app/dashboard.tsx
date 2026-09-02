@@ -46,7 +46,80 @@ function Dashboard() {
       {role === "tnq_team" && <SmeDash dose={dose} />}
       {role === "super_admin" && <AdminDash dose={dose} />}
       <QualityByProject role={role} />
+      <WallOfExcellence role={role} />
     </div>
+  );
+}
+
+/* ------------ WALL OF EXCELLENCE (all roles) ------------ */
+type Recognition = { id: string; contributor_id: string; given_by: string; message: string; created_at: string };
+function WallOfExcellence({ role }: { role: string | null }) {
+  const [items, setItems] = useState<Recognition[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string | null }[]>(
+    [],
+  );
+  const canGive = role === "super_admin" || role === "tnq_team";
+
+  const load = async () => {
+    const [{ data: r }, { data: p }] = await Promise.all([
+      (supabase as any)
+        .from("recognitions")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(6),
+      supabase.from("profiles").select("id,name,email"),
+    ]);
+    setItems((r as Recognition[]) ?? []);
+    setProfiles((p as any) ?? []);
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  useAutoRefresh(load);
+
+  const who = (id: string) => {
+    const p = profiles.find((x) => x.id === id);
+    return p?.name ?? p?.email ?? "—";
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-primary" />
+          <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
+            Wall of excellence
+          </div>
+        </div>
+        {canGive && (
+          <Link
+            to="/admin/recognitions"
+            className="font-mono text-[11px] tracking-wider text-primary uppercase hover:underline"
+          >
+            Give recognition →
+          </Link>
+        )}
+      </div>
+      {items.length === 0 ? (
+        <EmptyState
+          title="No recognitions yet"
+          subtitle={
+            canGive ? "Give the first one above." : "Celebrate teammates from the admin console."
+          }
+          icon={<Trophy className="h-8 w-8" />}
+        />
+      ) : (
+        <div className="space-y-3">
+          {items.map((r) => (
+            <div key={r.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
+              <div className="text-sm font-medium text-foreground">{who(r.contributor_id)}</div>
+              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{r.message}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">by {who(r.given_by)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -594,20 +667,7 @@ function AdminDash({ dose }: { dose: string }) {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card>
-          <div className="flex items-center gap-2 mb-3">
-            <Trophy className="h-4 w-4 text-primary" />
-            <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
-              Wall of excellence
-            </div>
-          </div>
-          <EmptyState
-            title="No recognitions yet"
-            subtitle="Celebrate teammates from the admin console."
-            icon={<Trophy className="h-8 w-8" />}
-          />
-        </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <div className="flex items-center gap-2 mb-3">
             <ClipboardCheck className="h-4 w-4 text-primary" />

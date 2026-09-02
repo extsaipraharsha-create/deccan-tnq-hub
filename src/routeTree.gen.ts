@@ -35,6 +35,7 @@ import { Route as AppProjectsIdRouteImport } from './routes/_app/projects.$id'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppAdminSourcesRouteImport } from './routes/_app/admin/sources'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
+import { Route as AppAdminRecognitionsRouteImport } from './routes/_app/admin/recognitions'
 import { Route as AppAdminGrantsRouteImport } from './routes/_app/admin/grants'
 import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
 import { Route as AppAdminAnnouncementsRouteImport } from './routes/_app/admin/announcements'
@@ -168,6 +169,11 @@ const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
   path: '/admin/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRecognitionsRoute = AppAdminRecognitionsRouteImport.update({
+  id: '/admin/recognitions',
+  path: '/admin/recognitions',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminGrantsRoute = AppAdminGrantsRouteImport.update({
   id: '/admin/grants',
   path: '/admin/grants',
@@ -209,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/admin/announcements': typeof AppAdminAnnouncementsRoute
   '/admin/audit': typeof AppAdminAuditRoute
   '/admin/grants': typeof AppAdminGrantsRoute
+  '/admin/recognitions': typeof AppAdminRecognitionsRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/sources': typeof AppAdminSourcesRoute
   '/admin/users': typeof AppAdminUsersRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByTo {
   '/admin/announcements': typeof AppAdminAnnouncementsRoute
   '/admin/audit': typeof AppAdminAuditRoute
   '/admin/grants': typeof AppAdminGrantsRoute
+  '/admin/recognitions': typeof AppAdminRecognitionsRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/sources': typeof AppAdminSourcesRoute
   '/admin/users': typeof AppAdminUsersRoute
@@ -271,6 +279,7 @@ export interface FileRoutesById {
   '/_app/admin/announcements': typeof AppAdminAnnouncementsRoute
   '/_app/admin/audit': typeof AppAdminAuditRoute
   '/_app/admin/grants': typeof AppAdminGrantsRoute
+  '/_app/admin/recognitions': typeof AppAdminRecognitionsRoute
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/sources': typeof AppAdminSourcesRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/audit'
     | '/admin/grants'
+    | '/admin/recognitions'
     | '/admin/settings'
     | '/admin/sources'
     | '/admin/users'
@@ -333,6 +343,7 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/audit'
     | '/admin/grants'
+    | '/admin/recognitions'
     | '/admin/settings'
     | '/admin/sources'
     | '/admin/users'
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
     | '/_app/admin/announcements'
     | '/_app/admin/audit'
     | '/_app/admin/grants'
+    | '/_app/admin/recognitions'
     | '/_app/admin/settings'
     | '/_app/admin/sources'
     | '/_app/admin/users'
@@ -563,6 +575,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/recognitions': {
+      id: '/_app/admin/recognitions'
+      path: '/admin/recognitions'
+      fullPath: '/admin/recognitions'
+      preLoaderRoute: typeof AppAdminRecognitionsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/grants': {
       id: '/_app/admin/grants'
       path: '/admin/grants'
@@ -619,6 +638,7 @@ interface AppRouteChildren {
   AppAdminAnnouncementsRoute: typeof AppAdminAnnouncementsRoute
   AppAdminAuditRoute: typeof AppAdminAuditRoute
   AppAdminGrantsRoute: typeof AppAdminGrantsRoute
+  AppAdminRecognitionsRoute: typeof AppAdminRecognitionsRoute
   AppAdminSettingsRoute: typeof AppAdminSettingsRoute
   AppAdminSourcesRoute: typeof AppAdminSourcesRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
@@ -644,6 +664,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminAnnouncementsRoute: AppAdminAnnouncementsRoute,
   AppAdminAuditRoute: AppAdminAuditRoute,
   AppAdminGrantsRoute: AppAdminGrantsRoute,
+  AppAdminRecognitionsRoute: AppAdminRecognitionsRoute,
   AppAdminSettingsRoute: AppAdminSettingsRoute,
   AppAdminSourcesRoute: AppAdminSourcesRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,

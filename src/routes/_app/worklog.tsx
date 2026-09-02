@@ -297,10 +297,23 @@ function WorkLogPage() {
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskDraft[]>([blankTask()]);
 
-  const [filterType, setFilterType] = useState<"all" | EntryType>("all");
-  const [filterPriority, setFilterPriority] = useState<"all" | Priority>("all");
+  // Restore the last-used filter combo (per-user, via localStorage) on
+  // first render, computed once so it doesn't refetch on every render.
+  const savedFilters = useState(() => {
+    try {
+      const raw = user ? localStorage.getItem(`tnq_worklog_filters_${user.id}`) : null;
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  })[0];
+
+  const [filterType, setFilterType] = useState<"all" | EntryType>(savedFilters.filterType ?? "all");
+  const [filterPriority, setFilterPriority] = useState<"all" | Priority>(
+    savedFilters.filterPriority ?? "all",
+  );
   const [filterUser, setFilterUser] = useState<string>("");
-  const [filterProject, setFilterProject] = useState<string>("");
+  const [filterProject, setFilterProject] = useState<string>(savedFilters.filterProject ?? "");
   const [search, setSearch] = useState("");
   const [dateMode, setDateMode] = useState<"all" | "day" | "month">("all");
   const [dateValue, setDateValue] = useState<string>("");
@@ -312,7 +325,9 @@ function WorkLogPage() {
   const [editDeadline, setEditDeadline] = useState<string>("");
   const [editReviewerId, setEditReviewerId] = useState<string>("");
 
-  const [viewMode, setViewMode] = useState<"feed" | "board" | "person" | "team">("feed");
+  const [viewMode, setViewMode] = useState<"feed" | "board" | "person" | "team">(
+    savedFilters.viewMode ?? "feed",
+  );
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
 
@@ -320,6 +335,19 @@ function WorkLogPage() {
   const [rosterProjectFilter, setRosterProjectFilter] = useState("");
   const [expandedRosterId, setExpandedRosterId] = useState<string | null>(null);
   const [reportUserId, setReportUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    try {
+      localStorage.setItem(
+        `tnq_worklog_filters_${user.id}`,
+        JSON.stringify({ filterType, filterPriority, filterProject, viewMode }),
+      );
+    } catch {
+      // Storage can be unavailable (private mode, quota) — filters just
+      // won't persist that session, nothing else depends on this.
+    }
+  }, [user, filterType, filterPriority, filterProject, viewMode]);
 
   const PUSH_DISMISS_KEY = "tnq_push_reminder_dismissed";
   const [showPushPrompt, setShowPushPrompt] = useState(false);

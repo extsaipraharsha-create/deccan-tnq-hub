@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,7 +16,17 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
-import { Plus, Target, AlertCircle, Power } from "lucide-react";
+import { WorklogReport } from "@/components/tnq/WorklogReport";
+import {
+  Plus,
+  Target,
+  AlertCircle,
+  Power,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface Prof {
@@ -81,6 +92,7 @@ function QualityPage() {
   const [openIssue, setOpenIssue] = useState(false);
   const [s, setS] = useState({ contributor_id: "", project_id: "", score: "85", notes: "" });
   const [i, setI] = useState({ contributor_id: "", project_id: "", issue: "" });
+  const [reportUserId, setReportUserId] = useState<string | null>(null);
 
   async function load() {
     const [{ data: sc }, { data: is }, { data: pr }, { data: pj }] = await Promise.all([
@@ -113,6 +125,40 @@ function QualityPage() {
       return { ...p, avg, open, lastReview: last };
     });
   }, [projects, scores, issues]);
+
+  // Per-worklog-author view: one row per person with any score or issue,
+  // regardless of role — generic across the org, same as Worklog's Team
+  // Roster. Trend compares the two most recent scores.
+  const personStats = useMemo(() => {
+    const ids = new Set<string>();
+    scores.forEach((sc) => sc.contributor_id && ids.add(sc.contributor_id));
+    issues.forEach((x) => x.contributor_id && ids.add(x.contributor_id));
+    const out: {
+      id: string;
+      avg: number | null;
+      trend: "up" | "down" | "flat" | null;
+      openIssues: number;
+      count: number;
+    }[] = [];
+    for (const id of ids) {
+      const list = scores.filter((sc) => sc.contributor_id === id);
+      const sorted = [...list].sort((a, b) => b.review_date.localeCompare(a.review_date));
+      const avg = list.length
+        ? Math.round((list.reduce((a, b) => a + Number(b.score), 0) / list.length) * 10) / 10
+        : null;
+      let trend: "up" | "down" | "flat" | null = null;
+      if (sorted.length >= 2) {
+        const diff = Number(sorted[0].score) - Number(sorted[1].score);
+        trend = diff > 0.05 ? "up" : diff < -0.05 ? "down" : "flat";
+      }
+      const openIssues = issues.filter(
+        (x) => x.contributor_id === id && x.status === "open",
+      ).length;
+      out.push({ id, avg, trend, openIssues, count: list.length });
+    }
+    out.sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+    return out;
+  }, [scores, issues]);
 
   async function addScore() {
     if (!s.contributor_id) return;
@@ -210,6 +256,16 @@ function QualityPage() {
         >
           ALL PROJECTS
         </button>
+        <button
+          onClick={() => setActiveTab("by_person")}
+          className={`font-mono text-[11px] font-bold tracking-[0.16em] px-4 py-2 rounded-full whitespace-nowrap ${
+            activeTab === "by_person"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          BY PERSON
+        </button>
         {projects.map((p) => (
           <button
             key={p.id}
@@ -225,7 +281,62 @@ function QualityPage() {
         ))}
       </div>
 
-      {activeTab === "all" ? (
+      {activeTab === "by_person" ? (
+        <Card className="!p-0 overflow-hidden">
+          {personStats.length === 0 ? (
+            <EmptyState icon={<Users className="h-10 w-10" />} title="No scores or issues yet" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 border-b border-border">
+                  <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
+                    <th className="text-left px-5 py-3">Person</th>
+                    <th className="text-left px-3 py-3">Avg Score</th>
+                    <th className="text-left px-3 py-3">Trend</th>
+                    <th className="text-left px-3 py-3">Reviews</th>
+                    <th className="text-left px-3 py-3">Open Issues</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {personStats.map((p) => {
+                    const prof = profiles.find((x) => x.id === p.id);
+                    return (
+                      <tr key={p.id} className="hover:bg-accent/40">
+                        <td className="px-5 py-3">
+                          <button
+                            onClick={() => setReportUserId(p.id)}
+                            className="font-semibold text-foreground hover:text-primary"
+                          >
+                            {prof?.name ?? prof?.email ?? "—"}
+                          </button>
+                        </td>
+                        <td className="px-3 py-3">
+                          <Badge tone={scoreTone(p.avg)}>
+                            {p.avg != null ? p.avg.toFixed(1) : "—"}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-3">
+                          {p.trend === "up" ? (
+                            <TrendingUp className="h-4 w-4 text-emerald-600" />
+                          ) : p.trend === "down" ? (
+                            <TrendingDown className="h-4 w-4 text-rose-600" />
+                          ) : p.trend === "flat" ? (
+                            <Minus className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 font-mono">{p.count}</td>
+                        <td className="px-3 py-3 font-mono">{p.openIssues}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : activeTab === "all" ? (
         <Card className="!p-0 overflow-hidden">
           {projectStats.length === 0 ? (
             <EmptyState title="No projects yet" />
@@ -524,6 +635,21 @@ function QualityPage() {
             ))}
           </Select>
         </Field>
+      </Modal>
+
+      <Modal
+        open={!!reportUserId}
+        onClose={() => setReportUserId(null)}
+        title={
+          reportUserId
+            ? (() => {
+                const p = profiles.find((x) => x.id === reportUserId);
+                return `${p?.name ?? p?.email ?? "Report"}'s report`;
+              })()
+            : "Report"
+        }
+      >
+        {reportUserId && <WorklogReport userId={reportUserId} />}
       </Modal>
     </div>
   );

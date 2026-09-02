@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
+import { undoableAction } from "@/lib/tnq/confirm-toast";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { WorklogReport } from "@/components/tnq/WorklogReport";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
@@ -289,6 +290,7 @@ function WorkLogPage() {
   const canPost = role === "super_admin" || role === "tnq_team";
 
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [delayLogs, setDelayLogs] = useState<DelayLog[]>([]);
@@ -556,11 +558,27 @@ function WorkLogPage() {
     setEditId(null);
     toast.success("Updated");
   }
-  async function remove(id: string) {
-    if (!confirm("Delete this entry?")) return;
-    const { error } = await supabase.from("work_log_entries").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted");
+  function remove(id: string) {
+    setPendingDeleteIds((prev) => new Set(prev).add(id));
+    undoableAction(
+      "Entry deleted",
+      async () => {
+        const { error } = await supabase.from("work_log_entries").delete().eq("id", id);
+        if (error) toast.error(error.message);
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      },
+      () => {
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      },
+    );
   }
   async function markComplete(id: string) {
     const { error } = await supabase
@@ -613,6 +631,7 @@ function WorkLogPage() {
   // Step 1: filter entries
   const filtered = useMemo(() => {
     return entries.filter((e) => {
+      if (pendingDeleteIds.has(e.id)) return false;
       if (filterType !== "all" && e.entry_type !== filterType) return false;
       if (filterPriority !== "all" && e.priority !== filterPriority) return false;
       if (filterUser && e.user_id !== filterUser) return false;
@@ -629,6 +648,7 @@ function WorkLogPage() {
     });
   }, [
     entries,
+    pendingDeleteIds,
     filterType,
     filterPriority,
     filterUser,
@@ -1291,16 +1311,19 @@ function WorkLogPage() {
                   <span className="font-mono text-[11px] text-muted-foreground">{items.length}</span>
                 </div>
                 <div className="space-y-2 min-h-20">
-                  {items.map((e, i) => {
+                  <AnimatePresence initial={false}>
+                    {items.map((e, i) => {
                     const author = profiles.find((p) => p.id === e.user_id);
                     const proj = projects.find((p) => p.id === e.project_id);
                     return (
                       <motion.button
                         key={e.id}
+                        layout
                         type="button"
                         onClick={() => setDetailEntry(e)}
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.15, delay: Math.min(i, 6) * 0.02 }}
                         whileHover={{ y: -2 }}
                         className={`block w-full text-left bg-card border border-border rounded-xl p-3 shadow-soft hover:shadow-lift transition-shadow ${e.priority === "P0" ? "border-l-4 border-l-destructive" : ""}`}
@@ -1333,7 +1356,8 @@ function WorkLogPage() {
                         </div>
                       </motion.button>
                     );
-                  })}
+                    })}
+                  </AnimatePresence>
                   {items.length === 0 && (
                     <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
                       Nothing here

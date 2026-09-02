@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { CommandPalette } from "./CommandPalette";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -20,6 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </motion.main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

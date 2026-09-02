@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, Input, Badge, EmptyState, Button } from "@/components/tnq/ui";
@@ -38,7 +39,7 @@ function TeamPage() {
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
   const [filter, setFilter] = useState<FilterKey>("all");
 
   const load = async () => {
@@ -64,6 +65,15 @@ function TeamPage() {
     );
     return profiles.filter((p) => smeIds.has(p.id));
   }, [profiles, roles]);
+
+  useEffect(() => {
+    if (loading || !q.trim()) return;
+    const match = smes.find((s) => (s.name ?? s.email ?? "") === q);
+    if (!match) return;
+    const el = document.getElementById(`row-${match.id}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, smes]);
 
   // For each SME, gather their projects (sme_owner_id OR in current_owner_ids)
   const rows = useMemo(() => {
@@ -148,7 +158,7 @@ function TeamPage() {
                 {rows.map(({ sme, projects: projs }) => {
                   const init = (sme.name ?? sme.email ?? "?").slice(0, 1).toUpperCase();
                   return (
-                    <tr key={sme.id} className="hover:bg-accent/40">
+                    <tr id={`row-${sme.id}`} key={sme.id} className="hover:bg-accent/40">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           {sme.photo_url ? (

@@ -32,12 +32,12 @@ import { usePendingReviewCount } from "@/lib/tnq/use-pending-review-count";
 import { ROLE_LABEL, ROLE_ACCENT } from "@/lib/tnq/constants";
 import type { AppRole } from "@/lib/tnq/types";
 
-type IconType = React.ComponentType<{ className?: string }>;
+export type IconType = React.ComponentType<{ className?: string }>;
 
-type NavItem = { label: string; to: string; icon: IconType };
-type NavSection = { label: string; items: NavItem[]; admin?: boolean };
+export type NavItem = { label: string; to: string; icon: IconType };
+export type NavSection = { label: string; items: NavItem[]; admin?: boolean };
 
-const NAV: Record<AppRole, NavSection[]> = {
+export const NAV: Record<AppRole, NavSection[]> = {
   contributor: [
     { label: "OVERVIEW", items: [{ label: "Dashboard", to: "/dashboard", icon: LayoutDashboard }] },
     {
@@ -131,7 +131,7 @@ const NAV: Record<AppRole, NavSection[]> = {
   pending: [],
 };
 
-const ADMIN_SUB: NavItem[] = [
+export const ADMIN_SUB: NavItem[] = [
   { label: "Users & Roles", to: "/admin/users", icon: Shield },
   { label: "Resource Grants", to: "/admin/grants", icon: FileText },
   { label: "Announcements", to: "/admin/announcements", icon: Megaphone },

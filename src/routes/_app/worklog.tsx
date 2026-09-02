@@ -349,6 +349,14 @@ function WorkLogPage() {
     }
   }, [user, filterType, filterPriority, filterProject, viewMode]);
 
+  // Dashboard's "My open items" shortcut lands here as /worklog?view=board&mine=1.
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("view") === "board") setViewMode("board");
+    if (params.get("mine") === "1") setFilterUser(user.id);
+  }, [user]);
+
   const PUSH_DISMISS_KEY = "tnq_push_reminder_dismissed";
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [enablingPush, setEnablingPush] = useState(false);

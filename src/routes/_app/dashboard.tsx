@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen,
   FlaskConical,
@@ -11,6 +12,8 @@ import {
   Activity,
   Trophy,
   AlertCircle,
+  ChevronDown,
+  LayoutGrid,
 } from "lucide-react";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -45,11 +48,32 @@ function Dashboard() {
           {heroTitle}
         </h1>
       </div>
-      <NeedsReviewWidget />
-      {role === "contributor" && <ContributorDash dose={dose} />}
-      {role === "tnq_team" && <SmeDash dose={dose} />}
-      {role === "super_admin" && <AdminDash dose={dose} />}
-      <QualityByProject role={role} />
+
+      {/* Scannable stats stay full-width up top; everything else splits into
+          a main column plus a side rail instead of one long vertical stack. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+        <div className="space-y-8 min-w-0">
+          <NeedsReviewWidget />
+          {role === "contributor" && <ContributorDash dose={dose} />}
+          {role === "tnq_team" && <SmeDash dose={dose} />}
+          {role === "super_admin" && <AdminDash dose={dose} />}
+          <QualityByProject role={role} />
+        </div>
+        <div className="space-y-4 lg:sticky lg:top-6">
+          <a
+            href="/worklog?view=board&mine=1"
+            className="block bg-card border border-border rounded-2xl p-4 shadow-soft hover:shadow-lift transition-shadow"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <LayoutGrid className="h-4 w-4 text-primary" /> My open items
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Jump into your Worklog board, filtered to just yours →
+            </div>
+          </a>
+          <WallOfExcellence />
+        </div>
+      </div>
     </div>
   );
 }
@@ -66,6 +90,7 @@ function WallOfExcellence() {
     { id: string; name: string | null; email: string | null }[]
   >([]);
   const [celebrate, setCelebrate] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
   const canGive = role === "super_admin" || role === "tnq_team";
   const seenIds = useRef<Set<string> | null>(null);
 
@@ -127,49 +152,76 @@ function WallOfExcellence() {
   return (
     <Card>
       <Confetti fire={celebrate} />
-      <div className="flex items-center justify-between mb-3">
+      <button
+        onClick={() => setCollapsed((s) => !s)}
+        className="w-full flex items-center justify-between mb-3"
+      >
         <div className="flex items-center gap-2">
           <Trophy className="h-4 w-4 text-primary" />
           <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
             Wall of excellence
           </div>
+          {posts.length > 0 && <Badge tone="default">{posts.length}</Badge>}
         </div>
-        {canGive && (
-          <Link
-            to="/admin/recognitions"
-            className="font-mono text-[11px] tracking-wider text-primary uppercase hover:underline"
-          >
-            Give recognition →
-          </Link>
-        )}
-      </div>
-      {posts.length === 0 ? (
-        <EmptyState
-          title="No recognitions yet"
-          subtitle={
-            canGive ? "Give the first one above." : "Celebrate teammates from the admin console."
-          }
-          icon={<Trophy className="h-8 w-8" />}
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`}
         />
-      ) : (
-        <div className="space-y-3">
-          {posts.map((p) => (
-            <div key={p.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
-              <div className="text-sm font-medium text-foreground">
-                {recipientsFor(p.id).map(who).join(", ") || "—"}
+      </button>
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            {canGive && (
+              <div className="mb-3">
+                <Link
+                  to="/admin/recognitions"
+                  className="font-mono text-[11px] tracking-wider text-primary uppercase hover:underline"
+                >
+                  Give recognition →
+                </Link>
               </div>
-              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{p.message}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">by {who(p.given_by)}</div>
-              <ReactionBar
-                postId={p.id}
-                reactions={reactionsFor(p.id)}
-                userId={user?.id}
-                onChange={load}
+            )}
+            {posts.length === 0 ? (
+              <EmptyState
+                title="No recognitions yet"
+                subtitle={
+                  canGive
+                    ? "Give the first one above."
+                    : "Celebrate teammates from the admin console."
+                }
+                icon={<Trophy className="h-8 w-8" />}
               />
-            </div>
-          ))}
-        </div>
-      )}
+            ) : (
+              <div className="space-y-3">
+                {posts.map((p) => (
+                  <div key={p.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
+                    <div className="text-sm font-medium text-foreground">
+                      {recipientsFor(p.id).map(who).join(", ") || "—"}
+                    </div>
+                    <div className="text-sm text-foreground/90 whitespace-pre-wrap">
+                      {p.message}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      by {who(p.given_by)}
+                    </div>
+                    <ReactionBar
+                      postId={p.id}
+                      reactions={reactionsFor(p.id)}
+                      userId={user?.id}
+                      onChange={load}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }
@@ -402,8 +454,6 @@ function ContributorDash({ dose }: { dose: string }) {
         <StatCard label="Projects" value={stats.projectCount} suffix="assigned" />
       </div>
 
-      <WallOfExcellence />
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
@@ -518,8 +568,6 @@ function SmeDash({ dose }: { dose: string }) {
         <StatCard label="Open Issues This Week" value={stats.openIssuesThisWeek} />
         <StatCard label="Contributors" value={stats.contributors} suffix="assigned" />
       </div>
-
-      <WallOfExcellence />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
@@ -648,8 +696,6 @@ function AdminDash({ dose }: { dose: string }) {
         <StatCard label="Open issues" value={stats.openIssues} />
         <StatCard label="Pending users" value={stats.pending} />
       </div>
-
-      <WallOfExcellence />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card>

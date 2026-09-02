@@ -640,6 +640,7 @@ function QualityPage() {
       <Modal
         open={!!reportUserId}
         onClose={() => setReportUserId(null)}
+        size="xl"
         title={
           reportUserId
             ? (() => {

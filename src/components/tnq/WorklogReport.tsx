@@ -55,9 +55,9 @@ export function WorklogReport({ userId }: { userId: string }) {
   const [avgScore, setAvgScore] = useState<number | null>(null);
   const [recognitionCount, setRecognitionCount] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [reviewsGiven, setReviewsGiven] = useState<{ created_at: string; reviewed_at: string | null }[]>(
-    [],
-  );
+  const [reviewsGiven, setReviewsGiven] = useState<
+    { created_at: string; reviewed_at: string | null }[]
+  >([]);
   const [reviewsReceived, setReviewsReceived] = useState<
     { created_at: string; reviewed_at: string | null }[]
   >([]);
@@ -67,33 +67,37 @@ export function WorklogReport({ userId }: { userId: string }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [{ data: e }, { data: dl }, { data: sc }, { data: rc }, { data: pj }, { data: rg }, { data: rr }] =
-        await Promise.all([
-          supabase
-            .from("work_log_entries")
-            .select("id,project_id,entry_type,completed_at,created_at")
-            .eq("user_id", userId),
-          (supabase as any)
-            .from("work_log_delay_log")
-            .select("id,old_deadline,new_deadline")
-            .eq("user_id", userId),
-          supabase.from("quality_scores").select("score").eq("contributor_id", userId),
-          (supabase as any)
-            .from("recognition_recipients")
-            .select("id")
-            .eq("contributor_id", userId),
-          supabase.from("projects").select("id,name,emoji_icon"),
-          (supabase as any)
-            .from("work_log_review_requests")
-            .select("created_at,reviewed_at")
-            .eq("reviewer_id", userId)
-            .neq("status", "pending"),
-          (supabase as any)
-            .from("work_log_review_requests")
-            .select("created_at,reviewed_at")
-            .eq("requested_by", userId)
-            .neq("status", "pending"),
-        ]);
+      const [
+        { data: e },
+        { data: dl },
+        { data: sc },
+        { data: rc },
+        { data: pj },
+        { data: rg },
+        { data: rr },
+      ] = await Promise.all([
+        supabase
+          .from("work_log_entries")
+          .select("id,project_id,entry_type,completed_at,created_at")
+          .eq("user_id", userId),
+        (supabase as any)
+          .from("work_log_delay_log")
+          .select("id,old_deadline,new_deadline")
+          .eq("user_id", userId),
+        supabase.from("quality_scores").select("score").eq("contributor_id", userId),
+        (supabase as any).from("recognition_recipients").select("id").eq("contributor_id", userId),
+        supabase.from("projects").select("id,name,emoji_icon"),
+        (supabase as any)
+          .from("work_log_review_requests")
+          .select("created_at,reviewed_at")
+          .eq("reviewer_id", userId)
+          .neq("status", "pending"),
+        (supabase as any)
+          .from("work_log_review_requests")
+          .select("created_at,reviewed_at")
+          .eq("requested_by", userId)
+          .neq("status", "pending"),
+      ]);
       if (cancelled) return;
       setEntries((e as any) ?? []);
       setDelays((dl as DelayLog[]) ?? []);
@@ -157,14 +161,14 @@ export function WorklogReport({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Completed" value={completedAllTime} suffix="all-time" />
         <StatCard label="Completed" value={completedThisMonth} suffix="this month" />
         <StatCard label="Completion rate" value={completionRate} suffix="%" />
         <StatCard label="Current streak" value={streak} suffix={streak === 1 ? "day" : "days"} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-center gap-2 mb-3">
             <Eye className="h-4 w-4 text-primary" />
@@ -203,12 +207,12 @@ export function WorklogReport({ userId }: { userId: string }) {
               {rankedProjects.map((r, i) => (
                 <div
                   key={r.project.id}
-                  className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
                 >
-                  <span className="text-sm text-foreground">
+                  <span className="min-w-0 truncate text-sm text-foreground">
                     {r.project.emoji_icon ?? "📁"} {r.project.name}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     {i === 0 && <Badge tone="success">Most active</Badge>}
                     <span className="font-mono text-xs text-muted-foreground">{r.count}</span>
                   </div>

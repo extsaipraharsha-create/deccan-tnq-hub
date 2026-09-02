@@ -492,11 +492,11 @@ function ProjectDetail() {
               SME Owner
             </div>
             {owner ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <Avatar p={owner} size={32} />
-                <div>
-                  <div className="text-sm font-medium text-foreground">{owner.name}</div>
-                  <div className="text-xs text-muted-foreground">{owner.email}</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">{owner.name}</div>
+                  <div className="text-xs text-muted-foreground truncate">{owner.email}</div>
                 </div>
               </div>
             ) : (
@@ -832,32 +832,34 @@ function ProjectDetail() {
               No contributors on this project.
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 border-b border-border">
-                <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
-                  <th className="text-left px-5 py-3">Name</th>
-                  <th className="text-left px-3 py-3">Onboarding</th>
-                  <th className="text-left px-3 py-3">Score</th>
-                  <th className="text-left px-3 py-3">SME</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {contribs.map((c: any) => (
-                  <tr key={c.id} className="hover:bg-accent/40">
-                    <td className="px-5 py-3 text-foreground">{c.name ?? c.email ?? "—"}</td>
-                    <td className="px-3 py-3">
-                      <Badge tone={c.onboarding_status === "complete" ? "success" : "warn"}>
-                        {c.onboarding_status ?? "pending"}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 font-mono">{c.avg_score ?? "—"}</td>
-                    <td className="px-3 py-3 text-muted-foreground">
-                      {profiles.find((p) => p.id === c.sme_id)?.name ?? "—"}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 border-b border-border">
+                  <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
+                    <th className="text-left px-5 py-3">Name</th>
+                    <th className="text-left px-3 py-3">Onboarding</th>
+                    <th className="text-left px-3 py-3">Score</th>
+                    <th className="text-left px-3 py-3">SME</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {contribs.map((c: any) => (
+                    <tr key={c.id} className="hover:bg-accent/40">
+                      <td className="px-5 py-3 text-foreground">{c.name ?? c.email ?? "—"}</td>
+                      <td className="px-3 py-3">
+                        <Badge tone={c.onboarding_status === "complete" ? "success" : "warn"}>
+                          {c.onboarding_status ?? "pending"}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-3 font-mono">{c.avg_score ?? "—"}</td>
+                      <td className="px-3 py-3 text-muted-foreground">
+                        {profiles.find((p) => p.id === c.sme_id)?.name ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       )}
@@ -876,28 +878,30 @@ function ProjectDetail() {
             </Card>
           ) : (
             <Card className="p-0! overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 border-b border-border">
-                  <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
-                    <th className="text-left px-5 py-3">Issue</th>
-                    <th className="text-left px-3 py-3">Severity</th>
-                    <th className="text-left px-3 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {issues.map((i: any) => (
-                    <tr key={i.id}>
-                      <td className="px-5 py-3">{i.title ?? i.description ?? "Issue"}</td>
-                      <td className="px-3 py-3">
-                        <Badge tone="warn">{i.severity ?? "—"}</Badge>
-                      </td>
-                      <td className="px-3 py-3">
-                        <Badge>{i.status ?? "open"}</Badge>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 border-b border-border">
+                    <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
+                      <th className="text-left px-5 py-3">Issue</th>
+                      <th className="text-left px-3 py-3">Severity</th>
+                      <th className="text-left px-3 py-3">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {issues.map((i: any) => (
+                      <tr key={i.id}>
+                        <td className="px-5 py-3">{i.title ?? i.description ?? "Issue"}</td>
+                        <td className="px-3 py-3">
+                          <Badge tone="warn">{i.severity ?? "—"}</Badge>
+                        </td>
+                        <td className="px-3 py-3">
+                          <Badge>{i.status ?? "open"}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
         </div>
@@ -908,55 +912,57 @@ function ProjectDetail() {
           {activity.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">No activity logged.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 border-b border-border">
-                <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
-                  <th className="text-left px-5 py-3">When</th>
-                  <th className="text-left px-3 py-3">User</th>
-                  <th className="text-left px-3 py-3">Action</th>
-                  <th className="text-left px-3 py-3">Field</th>
-                  <th className="text-left px-3 py-3">Change</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {activity.map((a: any) => {
-                  const u = profiles.find((p) => p.id === a.user_id);
-                  return (
-                    <tr key={a.id}>
-                      <td className="px-5 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(a.timestamp).toLocaleString(undefined, {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td className="px-3 py-3">{u?.name ?? u?.email ?? "—"}</td>
-                      <td className="px-3 py-3 font-mono text-xs">{a.action}</td>
-                      <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
-                        {a.field_changed ?? "—"}
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        {a.field_changed ? (
-                          <span>
-                            <span className="text-muted-foreground line-through">
-                              {a.old_value || "∅"}
-                            </span>{" "}
-                            →{" "}
-                            <span className="text-foreground font-medium">
-                              {a.new_value || "∅"}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 border-b border-border">
+                  <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
+                    <th className="text-left px-5 py-3">When</th>
+                    <th className="text-left px-3 py-3">User</th>
+                    <th className="text-left px-3 py-3">Action</th>
+                    <th className="text-left px-3 py-3">Field</th>
+                    <th className="text-left px-3 py-3">Change</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {activity.map((a: any) => {
+                    const u = profiles.find((p) => p.id === a.user_id);
+                    return (
+                      <tr key={a.id}>
+                        <td className="px-5 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(a.timestamp).toLocaleString(undefined, {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">{u?.name ?? u?.email ?? "—"}</td>
+                        <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{a.action}</td>
+                        <td className="px-3 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                          {a.field_changed ?? "—"}
+                        </td>
+                        <td className="px-3 py-3 text-xs max-w-xs">
+                          {a.field_changed ? (
+                            <span className="block truncate" title={`${a.old_value || "∅"} → ${a.new_value || "∅"}`}>
+                              <span className="text-muted-foreground line-through">
+                                {a.old_value || "∅"}
+                              </span>{" "}
+                              →{" "}
+                              <span className="text-foreground font-medium">
+                                {a.new_value || "∅"}
+                              </span>
                             </span>
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       )}

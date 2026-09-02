@@ -447,15 +447,15 @@ function ContributorDash({ dose }: { dose: string }) {
         ]}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Modules done" value={stats.done} suffix={`of ${stats.total}`} />
         <StatCard label="Active projects" value={stats.activeProjectCount} suffix="active" />
         <StatCard label="Last score" value={stats.lastScore || "0.0"} suffix="/100" />
         <StatCard label="Projects" value={stats.projectCount} suffix="assigned" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card className="xl:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
               My learning path
@@ -562,15 +562,15 @@ function SmeDash({ dose }: { dose: string }) {
         ]}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="My projects" value={stats.projects} suffix="active" />
         <StatCard label="Active Contributors" value={stats.activeContributors} />
         <StatCard label="Open Issues This Week" value={stats.openIssuesThisWeek} />
         <StatCard label="Contributors" value={stats.contributors} suffix="assigned" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card className="xl:col-span-2">
           <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase mb-3">
             My contributors
           </div>
@@ -690,14 +690,14 @@ function AdminDash({ dose }: { dose: string }) {
         ]}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Active projects" value={stats.projects} suffix={`of ${stats.projTotal}`} />
         <StatCard label="Team members" value={stats.members} suffix="global" />
         <StatCard label="Open issues" value={stats.openIssues} />
         <StatCard label="Pending users" value={stats.pending} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card>
           <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase mb-4">
             Team by role
@@ -725,7 +725,7 @@ function AdminDash({ dose }: { dose: string }) {
           </div>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="xl:col-span-2">
           <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase mb-4">
             Project health matrix
           </div>

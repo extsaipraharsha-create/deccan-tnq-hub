@@ -110,13 +110,16 @@ export function Modal({
   title,
   children,
   footer,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: "md" | "lg" | "xl";
 }) {
+  const maxWidth = { md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" }[size];
   return (
     <AnimatePresence>
       {open && (
@@ -128,7 +131,7 @@ export function Modal({
           onClick={onClose}
         >
           <motion.div
-            className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-pop overflow-hidden"
+            className={`w-full ${maxWidth} bg-card border border-border rounded-2xl shadow-pop overflow-hidden`}
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96 }}

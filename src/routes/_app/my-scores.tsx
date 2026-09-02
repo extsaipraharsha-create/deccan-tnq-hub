@@ -58,7 +58,7 @@ function MyScoresPage() {
   return (
     <div>
       <PageHeader title="My quality scores" subtitle="Reviews and feedback from your SMEs" />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         <Card>
           <div className="text-xs text-muted-foreground uppercase">Average score</div>
           <div className="mt-2 text-3xl font-semibold">{avg}</div>

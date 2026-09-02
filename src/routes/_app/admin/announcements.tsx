@@ -1,45 +1,45 @@
 /* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { PageHeader, Card, Button, Textarea, EmptyState } from "@/components/tnq/ui";
+import { PageHeader, Card, Button, EmptyState } from "@/components/tnq/ui";
+import { MentionTextarea } from "@/components/tnq/MentionTextarea";
+import { Confetti } from "@/components/tnq/Confetti";
 import { supabase } from "@/integrations/supabase/client";
-import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Megaphone, Save } from "lucide-react";
 import { toast } from "sonner";
+
+type Person = { id: string; name: string | null; email: string | null };
 
 function AnnouncementsPage() {
   const [text, setText] = useState("");
   const [current, setCurrent] = useState("");
+  const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(0);
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("settings")
-      .select("value")
-      .eq("key", "announcement")
-      .limit(1)
-      .maybeSingle();
+    const [{ data, error }, { data: p }] = await Promise.all([
+      supabase.from("settings").select("value").eq("key", "announcement").limit(1).maybeSingle(),
+      supabase.from("profiles").select("id,name,email"),
+    ]);
     if (error) {
       toast.error(error.message);
       setLoading(false);
       return;
     }
-    const v = (data?.value as string) ?? "";
-    setCurrent(v);
-    setText(v);
+    // Intentionally does NOT prefill the compose box — it always starts
+    // empty (a "write a new one" box), independent of what's live. The
+    // live value only shows in the "Currently live" preview below.
+    setCurrent((data?.value as string) ?? "");
+    setPeople((p as Person[]) ?? []);
     setLoading(false);
   }
   useEffect(() => {
     load();
   }, []);
-  // Skip auto-refetch while the textarea no longer matches what's live
-  // (either an unsaved edit, or it was just cleared after a save).
-  useAutoRefresh(() => {
-    if (text === current) load();
-  });
 
   async function save() {
     setSaving(true);
@@ -49,6 +49,7 @@ function AnnouncementsPage() {
     setSaving(false);
     if (error) return toast.error(error.message);
     setCurrent(text);
+    if (text.trim()) setCelebrate((c) => c + 1);
     setText("");
     setSavedAt(new Date().toLocaleTimeString());
     toast.success(text ? "Announcement saved" : "Announcement cleared");
@@ -56,6 +57,7 @@ function AnnouncementsPage() {
 
   return (
     <div>
+      <Confetti fire={celebrate} />
       <PageHeader
         title="Admin · Announcements"
         subtitle="Shown as a dismissible banner on every page, for every role."
@@ -65,11 +67,12 @@ function AnnouncementsPage() {
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : (
           <>
-            <Textarea
+            <MentionTextarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Write a short announcement, then Save to broadcast it."
-              className="min-h-35"
+              onChange={setText}
+              people={people}
+              placeholder="Write a short announcement, then Save to broadcast it. Type @ to mention someone."
+              minHeight="min-h-35"
             />
             <div className="mt-3 flex items-center justify-between">
               <div className="text-xs text-muted-foreground">

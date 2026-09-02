@@ -52,6 +52,29 @@ function Dashboard() {
 
 /* ------------ WALL OF EXCELLENCE (all roles) ------------ */
 type Recognition = { id: string; contributor_id: string; given_by: string; message: string; created_at: string };
+type RecognitionBatch = {
+  key: string;
+  given_by: string;
+  message: string;
+  created_at: string;
+  contributor_ids: string[];
+};
+function groupRecognitions(items: Recognition[]): RecognitionBatch[] {
+  const map = new Map<string, RecognitionBatch>();
+  for (const r of items) {
+    const k = `${r.given_by}|${r.message}|${r.created_at}`;
+    const b = map.get(k) ?? {
+      key: k,
+      given_by: r.given_by,
+      message: r.message,
+      created_at: r.created_at,
+      contributor_ids: [],
+    };
+    b.contributor_ids.push(r.contributor_id);
+    map.set(k, b);
+  }
+  return Array.from(map.values());
+}
 function WallOfExcellence() {
   const { role } = useAuth();
   const [items, setItems] = useState<Recognition[]>([]);
@@ -61,12 +84,15 @@ function WallOfExcellence() {
   const canGive = role === "super_admin" || role === "tnq_team";
 
   const load = async () => {
+    // Fetch generously by row (a batch can span several rows for multiple
+    // people) then cap by batch count below, so a shared shoutout never
+    // gets a name cut off by the row limit.
     const [{ data: r }, { data: p }] = await Promise.all([
       (supabase as any)
         .from("recognitions")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(6),
+        .limit(30),
       supabase.from("profiles").select("id,name,email"),
     ]);
     setItems((r as Recognition[]) ?? []);
@@ -76,6 +102,8 @@ function WallOfExcellence() {
     load();
   }, []);
   useAutoRefresh(load);
+
+  const batches = groupRecognitions(items).slice(0, 5);
 
   const who = (id: string) => {
     const p = profiles.find((x) => x.id === id);
@@ -100,7 +128,7 @@ function WallOfExcellence() {
           </Link>
         )}
       </div>
-      {items.length === 0 ? (
+      {batches.length === 0 ? (
         <EmptyState
           title="No recognitions yet"
           subtitle={
@@ -110,11 +138,13 @@ function WallOfExcellence() {
         />
       ) : (
         <div className="space-y-3">
-          {items.map((r) => (
-            <div key={r.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
-              <div className="text-sm font-medium text-foreground">{who(r.contributor_id)}</div>
-              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{r.message}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">by {who(r.given_by)}</div>
+          {batches.map((b) => (
+            <div key={b.key} className="rounded-lg bg-muted/40 px-3 py-2.5">
+              <div className="text-sm font-medium text-foreground">
+                {b.contributor_ids.map(who).join(", ")}
+              </div>
+              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{b.message}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">by {who(b.given_by)}</div>
             </div>
           ))}
         </div>

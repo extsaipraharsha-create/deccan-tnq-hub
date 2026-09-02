@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { PageHeader, Card, Button, Textarea, Field, Modal, EmptyState } from "@/components/tnq/ui";
+import { PageHeader, Card, Button, Field, Modal, EmptyState } from "@/components/tnq/ui";
+import { MentionTextarea } from "@/components/tnq/MentionTextarea";
+import { Confetti } from "@/components/tnq/Confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -20,6 +22,27 @@ interface Prof {
   name: string | null;
   email: string | null;
   photo_url: string | null;
+}
+// One row per recipient, but everyone picked in the same submission shares
+// the exact same given_by/message/created_at (Postgres evaluates now() once
+// per insert statement) — group them back into one card, same trick used
+// for Worklog's "posted together" batching.
+type Batch = { key: string; given_by: string; message: string; created_at: string; contributor_ids: string[] };
+function groupRecognitions(items: Recognition[]): Batch[] {
+  const map = new Map<string, Batch>();
+  for (const r of items) {
+    const k = `${r.given_by}|${r.message}|${r.created_at}`;
+    const b = map.get(k) ?? {
+      key: k,
+      given_by: r.given_by,
+      message: r.message,
+      created_at: r.created_at,
+      contributor_ids: [],
+    };
+    b.contributor_ids.push(r.contributor_id);
+    map.set(k, b);
+  }
+  return Array.from(map.values());
 }
 
 function fmtDate(iso: string) {
@@ -41,6 +64,7 @@ function RecognitionsPage() {
     contributor_ids: [],
     message: "",
   });
+  const [celebrate, setCelebrate] = useState(0);
 
   async function load() {
     setLoading(true);
@@ -60,6 +84,8 @@ function RecognitionsPage() {
   }, []);
   useAutoRefresh(load);
 
+  const batches = groupRecognitions(items);
+
   function toggleContributor(id: string) {
     setForm((prev) => ({
       ...prev,
@@ -73,8 +99,6 @@ function RecognitionsPage() {
       toast.error("Pick at least one person and write a message");
       return;
     }
-    // One row per person so each gets their own card on the wall — all
-    // share the same message/timestamp since they came from one submission.
     const { error } = await (supabase as any)
       .from("recognitions")
       .insert(
@@ -87,6 +111,7 @@ function RecognitionsPage() {
     if (error) return toast.error(error.message);
     setOpen(false);
     setForm({ contributor_ids: [], message: "" });
+    setCelebrate((c) => c + 1);
     toast.success(
       form.contributor_ids.length > 1
         ? `Posted to Wall of Excellence for ${form.contributor_ids.length} people`
@@ -94,9 +119,17 @@ function RecognitionsPage() {
     );
     load();
   }
-  async function remove(id: string) {
+  async function remove(batch: Batch) {
     if (!confirm("Remove this recognition?")) return;
-    const { error } = await (supabase as any).from("recognitions").delete().eq("id", id);
+    const ids = items
+      .filter(
+        (r) =>
+          r.given_by === batch.given_by &&
+          r.message === batch.message &&
+          r.created_at === batch.created_at,
+      )
+      .map((r) => r.id);
+    const { error } = await (supabase as any).from("recognitions").delete().in("id", ids);
     if (error) return toast.error(error.message);
     toast.success("Removed");
     load();
@@ -108,6 +141,7 @@ function RecognitionsPage() {
 
   return (
     <div>
+      <Confetti fire={celebrate} />
       <PageHeader
         title="Admin · Wall of Excellence"
         subtitle="Public shoutouts — shown on everyone's Dashboard."
@@ -120,7 +154,7 @@ function RecognitionsPage() {
       <Card>
         {loading ? (
           <div className="text-sm text-muted-foreground">Loading…</div>
-        ) : items.length === 0 ? (
+        ) : batches.length === 0 ? (
           <EmptyState
             icon={<Trophy className="h-10 w-10" />}
             title="No recognitions yet"
@@ -128,19 +162,21 @@ function RecognitionsPage() {
           />
         ) : (
           <div className="divide-y divide-border -m-5">
-            {items.map((r) => (
-              <div key={r.id} className="p-4 flex items-start gap-3">
+            {batches.map((b) => (
+              <div key={b.key} className="p-4 flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">{who(r.contributor_id)}</div>
+                  <div className="text-sm font-medium text-foreground">
+                    {b.contributor_ids.map(who).join(", ")}
+                  </div>
                   <div className="mt-0.5 text-sm text-foreground/90 whitespace-pre-wrap">
-                    {r.message}
+                    {b.message}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {fmtDate(r.created_at)} · by {who(r.given_by)}
+                    {fmtDate(b.created_at)} · by {who(b.given_by)}
                   </div>
                 </div>
-                {(isAdmin || r.given_by === user?.id) && (
-                  <Button size="sm" variant="ghost" onClick={() => remove(r.id)}>
+                {(isAdmin || b.given_by === user?.id) && (
+                  <Button size="sm" variant="ghost" onClick={() => remove(b)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
@@ -167,7 +203,7 @@ function RecognitionsPage() {
           hint={
             form.contributor_ids.length > 0
               ? `${form.contributor_ids.length} selected`
-              : "Pick one or more — everyone selected gets this message."
+              : "Pick one or more — everyone selected gets this message, as one shared shoutout."
           }
         >
           <div className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border">
@@ -188,11 +224,11 @@ function RecognitionsPage() {
           </div>
         </Field>
         <Field label="Message">
-          <Textarea
+          <MentionTextarea
             value={form.message}
-            onChange={(e) => setForm({ ...form, message: e.target.value.slice(0, 300) })}
-            placeholder="e.g. Shipped the L2 pipeline gold labels a day early — great work!"
-            className="min-h-20"
+            onChange={(v) => setForm({ ...form, message: v.slice(0, 300) })}
+            people={profiles}
+            placeholder="e.g. Shipped the L2 pipeline gold labels a day early — great work! Type @ to mention someone."
           />
         </Field>
       </Modal>

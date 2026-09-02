@@ -65,6 +65,8 @@ type CoOwner = {
   user_id: string;
   working_on: string | null;
 };
+type Playground = { id: string; name: string; is_live: boolean; access_url: string | null };
+type LPItem = { id: string; name: string; is_live: boolean; user_url: string | null };
 
 const STATUS_TONE: Record<string, "success" | "warn" | "default"> = {
   active: "success",
@@ -132,9 +134,9 @@ function ProjectDetail() {
   const [links, setLinks] = useState<ProjectLink[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "links" | "contributors" | "quality" | "activity">(
-    "overview",
-  );
+  const [tab, setTab] = useState<
+    "overview" | "links" | "workspace" | "contributors" | "quality" | "activity"
+  >("overview");
   const [editHeader, setEditHeader] = useState(false);
   const [name, setName] = useState("");
   const [given, setGiven] = useState("");
@@ -148,6 +150,8 @@ function ProjectDetail() {
   const [issues, setIssues] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
   const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
+  const [playgrounds, setPlaygrounds] = useState<Playground[]>([]);
+  const [learningPaths, setLearningPaths] = useState<LPItem[]>([]);
   const [addCoOwner, setAddCoOwner] = useState<{ userId: string; workingOn: string } | null>(
     null,
   );
@@ -189,6 +193,16 @@ function ProjectDetail() {
       .order("timestamp", { ascending: false })
       .limit(100);
     setActivity(a ?? []);
+    const { data: pg } = await (supabase as any)
+      .from("playgrounds")
+      .select("id,name,is_live,access_url")
+      .eq("project_id", id);
+    setPlaygrounds((pg as any) ?? []);
+    const { data: lp } = await (supabase as any)
+      .from("learning_path_items")
+      .select("id,name,is_live,user_url")
+      .eq("project_id", id);
+    setLearningPaths((lp as any) ?? []);
     setLoading(false);
     loadedOnce.current = true;
   }
@@ -327,6 +341,7 @@ function ProjectDetail() {
   const TABS: { key: typeof tab; label: string }[] = [
     { key: "overview", label: "OVERVIEW" },
     { key: "links", label: "LINKS" },
+    { key: "workspace", label: "WORKSPACE" },
     { key: "contributors", label: "CONTRIBUTORS" },
     { key: "quality", label: "QUALITY" },
     { key: "activity", label: "ACTIVITY" },
@@ -487,6 +502,45 @@ function ProjectDetail() {
             ) : (
               <span className="text-sm text-muted-foreground">Unassigned</span>
             )}
+          </Card>
+
+          <Card className="lg:col-span-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                User Analytics
+              </div>
+              {canWrite && (
+                <button
+                  onClick={() => {
+                    const existing = links.find((l) => l.link_type === "user_analytics");
+                    setEditLink({
+                      type: "user_analytics",
+                      label: "User Analytics",
+                      url: existing?.url ?? "",
+                      existing,
+                    });
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {(() => {
+              const analytics = links.find((l) => l.link_type === "user_analytics");
+              return analytics ? (
+                <a
+                  href={analytics.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                >
+                  {analytics.url} <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <span className="text-sm text-muted-foreground italic">— Not set</span>
+              );
+            })()}
           </Card>
 
           <Card className="lg:col-span-3">
@@ -677,6 +731,97 @@ function ProjectDetail() {
               </button>
             </Card>
           )}
+        </div>
+      )}
+
+      {tab === "workspace" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <FlaskConical className="h-4 w-4 text-primary" />
+              <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
+                Playgrounds
+              </div>
+            </div>
+            {playgrounds.length === 0 ? (
+              <EmptyState
+                title="No playgrounds yet"
+                subtitle="Add one from the Workspace page."
+                icon={<FlaskConical className="h-8 w-8" />}
+              />
+            ) : (
+              <div className="space-y-2">
+                {playgrounds.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
+                      <span
+                        className={`font-mono text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ${p.is_live ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}
+                      >
+                        {p.is_live ? "LIVE" : "NOT LIVE"}
+                      </span>
+                    </div>
+                    {p.access_url && (
+                      <a
+                        href={p.access_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary shrink-0"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap className="h-4 w-4 text-primary" />
+              <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
+                Learning Paths
+              </div>
+            </div>
+            {learningPaths.length === 0 ? (
+              <EmptyState
+                title="No learning paths yet"
+                subtitle="Add one from the Workspace page."
+                icon={<GraduationCap className="h-8 w-8" />}
+              />
+            ) : (
+              <div className="space-y-2">
+                {learningPaths.map((l) => (
+                  <div
+                    key={l.id}
+                    className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">{l.name}</div>
+                      <span
+                        className={`font-mono text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ${l.is_live ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}
+                      >
+                        {l.is_live ? "LIVE" : "NOT LIVE"}
+                      </span>
+                    </div>
+                    {l.user_url && (
+                      <a
+                        href={l.user_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary shrink-0"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

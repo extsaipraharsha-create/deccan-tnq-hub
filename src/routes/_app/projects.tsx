@@ -45,6 +45,7 @@ type SmeOption = {
   email: string | null;
   photo_url: string | null;
 };
+type CoOwner = { id: string; project_id: string; user_id: string; working_on: string | null };
 
 const STATUSES: Project["status"][] = ["active", "paused", "completed"];
 const AUDIENCES = ["Contract", "Freelancers", "Internal Temporary", "Mixed", "N/A"];
@@ -98,6 +99,7 @@ function ProjectsPage() {
   const canWrite = role === "super_admin" || role === "tnq_team";
   const [items, setItems] = useState<Project[]>([]);
   const [smes, setSmes] = useState<SmeOption[]>([]);
+  const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
@@ -125,6 +127,8 @@ function ProjectsPage() {
         .in("id", ids);
       setSmes((profs ?? []) as any);
     }
+    const { data: co } = await (supabase as any).from("project_co_owners").select("*");
+    setCoOwners((co as CoOwner[]) ?? []);
     setLoading(false);
     loadedOnce.current = true;
   }
@@ -333,21 +337,55 @@ function ProjectsPage() {
                 {visible.map((p) => (
                   <tr key={p.id} className="hover:bg-accent/40 transition-colors">
                     <td className="px-5 py-3">
-                      <Link
-                        to="/projects/$id"
-                        params={{ id: p.id }}
-                        className="flex items-center gap-3 group"
-                      >
-                        <span className="text-xl">{p.emoji_icon ?? "📁"}</span>
-                        <div>
-                          <div className="font-semibold text-foreground group-hover:text-primary">
-                            {p.name}
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/projects/$id"
+                          params={{ id: p.id }}
+                          className="flex items-center gap-3 group"
+                        >
+                          <span className="text-xl">{p.emoji_icon ?? "📁"}</span>
+                          <div>
+                            <div className="font-semibold text-foreground group-hover:text-primary">
+                              {p.name}
+                            </div>
+                            {p.given_name && (
+                              <div className="text-xs text-muted-foreground">{p.given_name}</div>
+                            )}
                           </div>
-                          {p.given_name && (
-                            <div className="text-xs text-muted-foreground">{p.given_name}</div>
-                          )}
-                        </div>
-                      </Link>
+                        </Link>
+                        {(() => {
+                          const pcs = coOwners.filter((c) => c.project_id === p.id);
+                          if (pcs.length === 0) return null;
+                          return (
+                            <div className="relative group/co">
+                              <span className="font-mono text-[10px] font-bold text-muted-foreground border border-border rounded-full px-1.5 py-0.5 cursor-default">
+                                +{pcs.length}
+                              </span>
+                              <div className="absolute left-0 top-full mt-1 z-20 hidden group-hover/co:block w-56 rounded-lg border border-border bg-card shadow-pop p-2 space-y-1.5">
+                                <div className="font-mono text-[9px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                                  Co-owners
+                                </div>
+                                {pcs.map((c) => {
+                                  const sme = smes.find((s) => s.id === c.user_id);
+                                  return (
+                                    <div key={c.id} className="text-xs">
+                                      <span className="font-medium text-foreground">
+                                        {sme?.name ?? sme?.email ?? "—"}
+                                      </span>
+                                      {c.working_on && (
+                                        <span className="text-muted-foreground">
+                                          {" "}
+                                          — {c.working_on}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </td>
                     <td className="px-3 py-3">
                       <Badge tone="info">{p.audience_type ?? "N/A"}</Badge>

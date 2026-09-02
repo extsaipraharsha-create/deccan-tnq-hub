@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 // Keeps pages showing shared/team data current without a manual refresh:
 // re-runs `refetch` on an interval and whenever the tab regains focus or
 // becomes visible again, so edits made elsewhere (or by teammates) show up.
-export function useAutoRefresh(refetch: () => void, intervalMs = 20000) {
+export function useAutoRefresh(refetch: () => void, intervalMs = 8000) {
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
 

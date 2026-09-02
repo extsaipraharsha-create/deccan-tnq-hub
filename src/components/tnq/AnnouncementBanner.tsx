@@ -26,6 +26,22 @@ export function AnnouncementBanner() {
   }, []);
   useAutoRefresh(load);
 
+  // Realtime: an admin saving a new announcement shows up instantly for
+  // everyone with the app open, no poll delay.
+  useEffect(() => {
+    const ch = supabase
+      .channel("announcement-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "settings", filter: "key=eq.announcement" },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, []);
+
   if (!text || !text.trim()) return null;
   if (typeof window !== "undefined" && localStorage.getItem(DISMISS_KEY) === text) return null;
 

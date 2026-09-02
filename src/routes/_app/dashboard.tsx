@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   FlaskConical,
@@ -15,6 +15,8 @@ import {
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { supabase } from "@/integrations/supabase/client";
+import { Confetti } from "@/components/tnq/Confetti";
+import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
 import { Card, StatCard, EmptyState, StatusPill, Badge } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
 
@@ -51,67 +53,80 @@ function Dashboard() {
 }
 
 /* ------------ WALL OF EXCELLENCE (all roles) ------------ */
-type Recognition = { id: string; contributor_id: string; given_by: string; message: string; created_at: string };
-type RecognitionBatch = {
-  key: string;
-  given_by: string;
-  message: string;
-  created_at: string;
-  contributor_ids: string[];
-};
-function groupRecognitions(items: Recognition[]): RecognitionBatch[] {
-  const map = new Map<string, RecognitionBatch>();
-  for (const r of items) {
-    const k = `${r.given_by}|${r.message}|${r.created_at}`;
-    const b = map.get(k) ?? {
-      key: k,
-      given_by: r.given_by,
-      message: r.message,
-      created_at: r.created_at,
-      contributor_ids: [],
-    };
-    b.contributor_ids.push(r.contributor_id);
-    map.set(k, b);
-  }
-  return Array.from(map.values());
-}
+type Post = { id: string; given_by: string; message: string; created_at: string };
+type Recipient = { id: string; post_id: string; contributor_id: string };
 function WallOfExcellence() {
-  const { role } = useAuth();
-  const [items, setItems] = useState<Recognition[]>([]);
+  const { role, user } = useAuth();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string | null }[]>(
     [],
   );
+  const [celebrate, setCelebrate] = useState(0);
   const canGive = role === "super_admin" || role === "tnq_team";
+  const seenIds = useRef<Set<string> | null>(null);
 
   const load = async () => {
-    // Fetch generously by row (a batch can span several rows for multiple
-    // people) then cap by batch count below, so a shared shoutout never
-    // gets a name cut off by the row limit.
-    const [{ data: r }, { data: p }] = await Promise.all([
+    const [{ data: p }, { data: r }, { data: rx }, { data: pf }] = await Promise.all([
       (supabase as any)
-        .from("recognitions")
+        .from("recognition_posts")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(5),
+      (supabase as any).from("recognition_recipients").select("*"),
+      (supabase as any).from("recognition_reactions").select("*"),
       supabase.from("profiles").select("id,name,email"),
     ]);
-    setItems((r as Recognition[]) ?? []);
-    setProfiles((p as any) ?? []);
+    const nextPosts = (p as Post[]) ?? [];
+    // Fire confetti when a post neither the poster nor anyone else has
+    // "seen" on this screen yet shows up — i.e. for viewers watching the
+    // wall live, not for the person who just clicked Post themselves.
+    if (seenIds.current) {
+      const isNew = nextPosts.some((post) => !seenIds.current!.has(post.id));
+      if (isNew) setCelebrate((c) => c + 1);
+    }
+    seenIds.current = new Set(nextPosts.map((post) => post.id));
+    setPosts(nextPosts);
+    setRecipients((r as Recipient[]) ?? []);
+    setReactions((rx as Reaction[]) ?? []);
+    setProfiles((pf as any) ?? []);
   };
   useEffect(() => {
     load();
   }, []);
   useAutoRefresh(load);
 
-  const batches = groupRecognitions(items).slice(0, 5);
+  useEffect(() => {
+    const ch = supabase
+      .channel("dashboard-recognitions")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "recognition_posts" },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "recognition_reactions" },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, []);
 
   const who = (id: string) => {
     const p = profiles.find((x) => x.id === id);
     return p?.name ?? p?.email ?? "—";
   };
+  const recipientsFor = (postId: string) =>
+    recipients.filter((r) => r.post_id === postId).map((r) => r.contributor_id);
+  const reactionsFor = (postId: string) => reactions.filter((r) => r.post_id === postId);
 
   return (
     <Card>
+      <Confetti fire={celebrate} />
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Trophy className="h-4 w-4 text-primary" />
@@ -128,7 +143,7 @@ function WallOfExcellence() {
           </Link>
         )}
       </div>
-      {batches.length === 0 ? (
+      {posts.length === 0 ? (
         <EmptyState
           title="No recognitions yet"
           subtitle={
@@ -138,13 +153,19 @@ function WallOfExcellence() {
         />
       ) : (
         <div className="space-y-3">
-          {batches.map((b) => (
-            <div key={b.key} className="rounded-lg bg-muted/40 px-3 py-2.5">
+          {posts.map((p) => (
+            <div key={p.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
               <div className="text-sm font-medium text-foreground">
-                {b.contributor_ids.map(who).join(", ")}
+                {recipientsFor(p.id).map(who).join(", ") || "—"}
               </div>
-              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{b.message}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">by {who(b.given_by)}</div>
+              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{p.message}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">by {who(p.given_by)}</div>
+              <ReactionBar
+                postId={p.id}
+                reactions={reactionsFor(p.id)}
+                userId={user?.id}
+                onChange={load}
+              />
             </div>
           ))}
         </div>

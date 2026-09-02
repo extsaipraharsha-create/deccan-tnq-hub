@@ -28,6 +28,7 @@ import {
   FileBarChart,
 } from "lucide-react";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { usePendingReviewCount } from "@/lib/tnq/use-pending-review-count";
 import { ROLE_LABEL, ROLE_ACCENT } from "@/lib/tnq/constants";
 import type { AppRole } from "@/lib/tnq/types";
 
@@ -148,6 +149,7 @@ export function Sidebar() {
   const accent = ROLE_ACCENT[effRole];
   const initials = (profile?.name ?? profile?.email ?? "?").slice(0, 1).toUpperCase();
   const [adminOpen, setAdminOpen] = useState(pathname.startsWith("/admin"));
+  const pendingReviewCount = usePendingReviewCount();
 
   return (
     <aside className="w-65 shrink-0 flex flex-col bg-surface border-r border-border h-screen sticky top-0">
@@ -219,7 +221,12 @@ export function Sidebar() {
                       }`}
                     >
                       <Icon className="h-4 w-4" />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {item.to === "/worklog" && pendingReviewCount > 0 && (
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-destructive text-destructive-foreground">
+                          {pendingReviewCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

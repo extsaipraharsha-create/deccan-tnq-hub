@@ -17,6 +17,7 @@ import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { supabase } from "@/integrations/supabase/client";
 import { Confetti } from "@/components/tnq/Confetti";
 import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
+import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
 import { Card, StatCard, EmptyState, StatusPill, Badge } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
 
@@ -44,6 +45,7 @@ function Dashboard() {
           {heroTitle}
         </h1>
       </div>
+      <NeedsReviewWidget />
       {role === "contributor" && <ContributorDash dose={dose} />}
       {role === "tnq_team" && <SmeDash dose={dose} />}
       {role === "super_admin" && <AdminDash dose={dose} />}
@@ -60,9 +62,9 @@ function WallOfExcellence() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string | null }[]>(
-    [],
-  );
+  const [profiles, setProfiles] = useState<
+    { id: string; name: string | null; email: string | null }[]
+  >([]);
   const [celebrate, setCelebrate] = useState(0);
   const canGive = role === "super_admin" || role === "tnq_team";
   const seenIds = useRef<Set<string> | null>(null);
@@ -100,10 +102,8 @@ function WallOfExcellence() {
   useEffect(() => {
     const ch = supabase
       .channel("dashboard-recognitions")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "recognition_posts" },
-        () => load(),
+      .on("postgres_changes", { event: "*", schema: "public", table: "recognition_posts" }, () =>
+        load(),
       )
       .on(
         "postgres_changes",

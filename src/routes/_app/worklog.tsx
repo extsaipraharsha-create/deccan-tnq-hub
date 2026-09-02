@@ -10,6 +10,7 @@ import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { WorklogReport } from "@/components/tnq/WorklogReport";
+import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
 import { Card, Button, Textarea, Select, Input, Badge, EmptyState, Modal } from "@/components/tnq/ui";
 import {
   MessageSquare,
@@ -69,9 +70,17 @@ type TaskDraft = {
   entryType: EntryType;
   priority: Priority;
   deadline: string;
+  reviewerId: string;
 };
 function blankTask(): TaskDraft {
-  return { content: "", projectId: "", entryType: "working_on", priority: "P2", deadline: "" };
+  return {
+    content: "",
+    projectId: "",
+    entryType: "working_on",
+    priority: "P2",
+    deadline: "",
+    reviewerId: "",
+  };
 }
 
 // A "batch" is every entry posted in the same click of Post/Post All — they
@@ -301,6 +310,7 @@ function WorkLogPage() {
   const [editType, setEditType] = useState<EntryType>("working_on");
   const [editPriority, setEditPriority] = useState<Priority>("P2");
   const [editDeadline, setEditDeadline] = useState<string>("");
+  const [editReviewerId, setEditReviewerId] = useState<string>("");
 
   const [viewMode, setViewMode] = useState<"feed" | "board" | "person" | "team">("feed");
   const [overdueOnly, setOverdueOnly] = useState(false);
@@ -428,11 +438,17 @@ function WorkLogPage() {
   // Only rows with content typed in count toward validation/posting.
   const activeTasks = tasks.filter((t) => t.content.trim().length > 0);
   const tasksReady =
-    activeTasks.length > 0 && activeTasks.every((t) => t.content.trim().length <= 500 && t.deadline);
+    activeTasks.length > 0 &&
+    activeTasks.every(
+      (t) =>
+        t.content.trim().length <= 500 &&
+        t.deadline &&
+        (t.entryType !== "review_needed" || t.reviewerId),
+    );
 
   async function postAll() {
     if (!tasksReady) return;
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from("work_log_entries")
       // Keep runtime identical; avoid Supabase generic typing inferring `never`.
       .insert(
@@ -444,15 +460,22 @@ function WorkLogPage() {
           priority: t.priority,
           deadline: new Date(t.deadline).toISOString(),
         })) as any,
-      );
+      )
+      .select();
     if (error) return toast.error(error.message);
-    for (const t of activeTasks) {
+    const insertedEntries = (inserted as any as Entry[]) ?? [];
+    for (let i = 0; i < activeTasks.length; i++) {
+      const t = activeTasks[i];
+      const entry = insertedEntries[i];
       await supabase.from("activity_log").insert({
         user_id: user?.id ?? "",
         action: "worklog_post",
         action_type: "work_log",
         details: { type: t.entryType },
       } as any);
+      if (t.entryType === "review_needed" && t.reviewerId && entry) {
+        await requestReview(entry.id, t.reviewerId);
+      }
     }
     setTasks([blankTask()]);
     toast.success(activeTasks.length > 1 ? `Posted ${activeTasks.length} updates` : "Posted");
@@ -464,9 +487,14 @@ function WorkLogPage() {
     setEditType(e.entry_type);
     setEditPriority(e.priority || "P2");
     setEditDeadline(e.deadline ? toDatetimeLocal(e.deadline) : "");
+    setEditReviewerId("");
   }
   async function saveEdit(id: string) {
     const original = entries.find((e) => e.id === id);
+    if (editType === "review_needed" && original?.entry_type !== "review_needed" && !editReviewerId) {
+      toast.error("Pick a reviewer before saving");
+      return;
+    }
     const newDeadline = editDeadline ? new Date(editDeadline).toISOString() : null;
     const deadlineChanged = newDeadline !== (original?.deadline ?? null);
     const { error } = await supabase
@@ -486,6 +514,9 @@ function WorkLogPage() {
       } as any)
       .eq("id", id);
     if (error) return toast.error(error.message);
+    if (editType === "review_needed" && original?.entry_type !== "review_needed" && editReviewerId) {
+      await requestReview(id, editReviewerId);
+    }
     setEditId(null);
     toast.success("Updated");
   }
@@ -518,6 +549,22 @@ function WorkLogPage() {
   async function deleteComment(id: string) {
     const { error } = await (supabase as any).from("work_log_comments").delete().eq("id", id);
     if (error) toast.error(error.message);
+  }
+  async function requestReview(entryId: string, reviewerId: string) {
+    const { error } = await (supabase as any)
+      .from("work_log_review_requests")
+      .insert({ entry_id: entryId, requested_by: user?.id, reviewer_id: reviewerId });
+    if (error) return toast.error(error.message);
+    supabase.functions
+      .invoke("send-notification", {
+        body: {
+          user_ids: [reviewerId],
+          title: "👀 Review requested",
+          body: "Someone asked you to review a worklog entry.",
+          url: "/worklog",
+        },
+      })
+      .catch(() => {});
   }
   async function sendNudge(entryId: string, toUser: string) {
     const { error } = await (supabase as any)
@@ -733,6 +780,9 @@ function WorkLogPage() {
 
   return (
     <div>
+      <div className="mb-4">
+        <NeedsReviewWidget />
+      </div>
       {showPushPrompt && (
         <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 py-4">
           <div className="flex items-center gap-3">
@@ -832,6 +882,26 @@ function WorkLogPage() {
                       {t.content.length}/500
                     </span>
                   </div>
+                  {t.entryType === "review_needed" && (
+                    <div className="mt-2">
+                      <Select
+                        value={t.reviewerId}
+                        onChange={(e) => updateTask(i, { reviewerId: e.target.value })}
+                        className={`w-auto! h-8! text-xs! ${
+                          t.content.trim() && !t.reviewerId ? "border-destructive!" : ""
+                        }`}
+                      >
+                        <option value="">— Pick a reviewer (required) —</option>
+                        {profiles
+                          .filter((p) => p.id !== user?.id)
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name ?? p.email}
+                            </option>
+                          ))}
+                      </Select>
+                    </div>
+                  )}
                   {missingDeadline && (
                     <div className="mt-1.5 text-xs text-destructive">
                       Deadline required before this task can be posted.
@@ -1313,6 +1383,22 @@ function WorkLogPage() {
                                   title="Deadline"
                                   className="h-7! text-xs! w-auto!"
                                 />
+                                {editType === "review_needed" && e.entry_type !== "review_needed" && (
+                                  <Select
+                                    value={editReviewerId}
+                                    onChange={(ev) => setEditReviewerId(ev.target.value)}
+                                    className="h-7! text-xs! w-auto!"
+                                  >
+                                    <option value="">— Reviewer (required) —</option>
+                                    {profiles
+                                      .filter((pr) => pr.id !== user?.id)
+                                      .map((pr) => (
+                                        <option key={pr.id} value={pr.id}>
+                                          {pr.name ?? pr.email}
+                                        </option>
+                                      ))}
+                                  </Select>
+                                )}
                               </>
                             ) : (
                               <>
@@ -1570,6 +1656,23 @@ function WorkLogPage() {
                                               title="Deadline"
                                               className="h-7! text-xs! w-auto!"
                                             />
+                                            {editType === "review_needed" &&
+                                              e.entry_type !== "review_needed" && (
+                                                <Select
+                                                  value={editReviewerId}
+                                                  onChange={(ev) => setEditReviewerId(ev.target.value)}
+                                                  className="h-7! text-xs! w-auto!"
+                                                >
+                                                  <option value="">— Reviewer (required) —</option>
+                                                  {profiles
+                                                    .filter((pr) => pr.id !== user?.id)
+                                                    .map((pr) => (
+                                                      <option key={pr.id} value={pr.id}>
+                                                        {pr.name ?? pr.email}
+                                                      </option>
+                                                    ))}
+                                                </Select>
+                                              )}
                                           </>
                                         ) : (
                                           <>

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Card, StatCard, Badge, EmptyState } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
-import { FolderKanban, AlertTriangle, Trophy, Flame } from "lucide-react";
+import { FolderKanban, AlertTriangle, Trophy, Flame, Eye } from "lucide-react";
 
 type EntryType =
   | "working_on"
@@ -55,13 +55,19 @@ export function WorklogReport({ userId }: { userId: string }) {
   const [avgScore, setAvgScore] = useState<number | null>(null);
   const [recognitionCount, setRecognitionCount] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [reviewsGiven, setReviewsGiven] = useState<{ created_at: string; reviewed_at: string | null }[]>(
+    [],
+  );
+  const [reviewsReceived, setReviewsReceived] = useState<
+    { created_at: string; reviewed_at: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [{ data: e }, { data: dl }, { data: sc }, { data: rc }, { data: pj }] =
+      const [{ data: e }, { data: dl }, { data: sc }, { data: rc }, { data: pj }, { data: rg }, { data: rr }] =
         await Promise.all([
           supabase
             .from("work_log_entries")
@@ -77,6 +83,16 @@ export function WorklogReport({ userId }: { userId: string }) {
             .select("id")
             .eq("contributor_id", userId),
           supabase.from("projects").select("id,name,emoji_icon"),
+          (supabase as any)
+            .from("work_log_review_requests")
+            .select("created_at,reviewed_at")
+            .eq("reviewer_id", userId)
+            .neq("status", "pending"),
+          (supabase as any)
+            .from("work_log_review_requests")
+            .select("created_at,reviewed_at")
+            .eq("requested_by", userId)
+            .neq("status", "pending"),
         ]);
       if (cancelled) return;
       setEntries((e as any) ?? []);
@@ -87,6 +103,8 @@ export function WorklogReport({ userId }: { userId: string }) {
       );
       setRecognitionCount((rc as any[])?.length ?? 0);
       setProjects((pj as Project[]) ?? []);
+      setReviewsGiven((rg as any) ?? []);
+      setReviewsReceived((rr as any) ?? []);
       setLoading(false);
     })();
     return () => {
@@ -126,6 +144,17 @@ export function WorklogReport({ userId }: { userId: string }) {
   const blockedCount = entries.filter((e) => e.entry_type === "blocked").length;
   const blockedPct = entries.length ? Math.round((blockedCount / entries.length) * 100) : 0;
 
+  const avgReviewHours = (list: { created_at: string; reviewed_at: string | null }[]) => {
+    const done = list.filter((r) => r.reviewed_at);
+    if (done.length === 0) return null;
+    const total = done.reduce(
+      (sum, r) => sum + (new Date(r.reviewed_at!).getTime() - new Date(r.created_at).getTime()),
+      0,
+    );
+    return total / done.length / (1000 * 60 * 60);
+  };
+  const avgTimeToReviewOthers = avgReviewHours(reviewsGiven);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -135,7 +164,31 @@ export function WorklogReport({ userId }: { userId: string }) {
         <StatCard label="Current streak" value={streak} suffix={streak === 1 ? "day" : "days"} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <Card>
+          <div className="flex items-center gap-2 mb-3">
+            <Eye className="h-4 w-4 text-primary" />
+            <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
+              Reviews
+            </div>
+          </div>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Reviews given</span>
+              <span className="font-mono font-semibold">{reviewsGiven.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Reviews received</span>
+              <span className="font-mono font-semibold">{reviewsReceived.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Avg. time to review</span>
+              <span className="font-mono font-semibold">
+                {avgTimeToReviewOthers !== null ? `${avgTimeToReviewOthers.toFixed(1)}h` : "—"}
+              </span>
+            </div>
+          </div>
+        </Card>
         <Card>
           <div className="flex items-center gap-2 mb-3">
             <FolderKanban className="h-4 w-4 text-primary" />

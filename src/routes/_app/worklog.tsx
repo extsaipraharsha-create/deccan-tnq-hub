@@ -3,11 +3,13 @@
 /* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
-import { Card, Button, Textarea, Select, Input, Badge, EmptyState } from "@/components/tnq/ui";
+import { MentionTextarea } from "@/components/tnq/MentionTextarea";
+import { Card, Button, Textarea, Select, Input, Badge, EmptyState, Modal } from "@/components/tnq/ui";
 import {
   MessageSquare,
   Send,
@@ -19,6 +21,7 @@ import {
   Search,
   Users,
   List,
+  LayoutGrid,
   CheckCircle2,
   Bell,
 } from "lucide-react";
@@ -112,6 +115,17 @@ const TYPE_TONE: Record<EntryType, any> = Object.fromEntries(
   TYPES.map((t) => [t.key, t.tone]),
 ) as any;
 
+// Board view column order (per spec — deliberately different from the
+// TYPES array order above, which drives the post-form dropdown instead).
+const BOARD_ORDER: EntryType[] = [
+  "blocked",
+  "need_help",
+  "working_on",
+  "review_needed",
+  "completed",
+  "available_to_help",
+];
+
 const PRIORITY_LIST = [
   { key: "P0" as const, label: "P0-Critical" },
   { key: "P1" as const, label: "P1-High" },
@@ -204,8 +218,9 @@ function WorkLogPage() {
   const [editPriority, setEditPriority] = useState<Priority>("P2");
   const [editDeadline, setEditDeadline] = useState<string>("");
 
-  const [groupByPerson, setGroupByPerson] = useState(false);
+  const [viewMode, setViewMode] = useState<"feed" | "board" | "person">("feed");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
 
   const PUSH_DISMISS_KEY = "tnq_push_reminder_dismissed";
   const [showPushPrompt, setShowPushPrompt] = useState(false);
@@ -446,6 +461,19 @@ function WorkLogPage() {
     return out;
   }, [filtered]);
 
+  // Board view: flat entries (no batching) grouped into columns by status.
+  const boardColumns = useMemo(() => {
+    const map = new Map<EntryType, Entry[]>();
+    for (const t of BOARD_ORDER) map.set(t, []);
+    for (const e of filtered) {
+      map.get(e.entry_type)?.push(e);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+    return map;
+  }, [filtered]);
+
   function exportCsv() {
     const header = [
       "#",
@@ -543,11 +571,12 @@ function WorkLogPage() {
                       </button>
                     )}
                   </div>
-                  <Textarea
+                  <MentionTextarea
                     value={t.content}
-                    onChange={(e) => updateTask(i, { content: e.target.value.slice(0, 500) })}
-                    placeholder="e.g. Reviewing Playground content for Agent Mode project…"
-                    className="min-h-15"
+                    onChange={(v) => updateTask(i, { content: v.slice(0, 500) })}
+                    people={profiles}
+                    placeholder="e.g. Reviewing Playground content for Agent Mode project… Type @ to mention someone."
+                    minHeight="min-h-15"
                   />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Select
@@ -715,29 +744,33 @@ function WorkLogPage() {
           >
             Overdue only
           </button>
-          {/* Grouping toggle */}
-          <button
-            onClick={() => setGroupByPerson((s) => !s)}
-            className={`inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium rounded-lg border transition-colors ${
-              groupByPerson
-                ? "bg-foreground text-background border-foreground"
-                : "bg-card text-muted-foreground border-border hover:text-foreground"
-            }`}
-          >
-            {groupByPerson ? (
-              <>
-                <Users className="h-3.5 w-3.5" /> Grouped by Person
-              </>
-            ) : (
-              <>
-                <List className="h-3.5 w-3.5" /> Chronological
-              </>
-            )}
-          </button>
         </div>
         <Button variant="secondary" size="sm" onClick={exportCsv}>
           <Download className="h-3.5 w-3.5" /> Export CSV
         </Button>
+      </div>
+
+      {/* View mode */}
+      <div className="mb-4 flex items-center gap-1 bg-card border border-border rounded-full p-1 shadow-soft w-fit">
+        {(
+          [
+            { key: "feed" as const, label: "Feed", icon: List },
+            { key: "board" as const, label: "Board", icon: LayoutGrid },
+            { key: "person" as const, label: "Grouped by Person", icon: Users },
+          ] as const
+        ).map((v) => (
+          <button
+            key={v.key}
+            onClick={() => setViewMode(v.key)}
+            className={`inline-flex items-center gap-1.5 font-mono text-[11px] font-bold tracking-[0.18em] px-4 py-2 rounded-full transition-colors uppercase ${
+              viewMode === v.key
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <v.icon className="h-3.5 w-3.5" /> {v.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
@@ -749,7 +782,72 @@ function WorkLogPage() {
             subtitle="Post your first update above."
           />
         </Card>
-      ) : groupByPerson ? (
+      ) : viewMode === "board" ? (
+        /* ========== BOARD VIEW ========== */
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {BOARD_ORDER.map((t) => {
+            const items = boardColumns.get(t) ?? [];
+            return (
+              <div key={t} className="w-72 shrink-0">
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <Badge tone={TYPE_TONE[t]}>{TYPE_LABEL[t]}</Badge>
+                  <span className="font-mono text-[11px] text-muted-foreground">{items.length}</span>
+                </div>
+                <div className="space-y-2 min-h-20">
+                  {items.map((e, i) => {
+                    const author = profiles.find((p) => p.id === e.user_id);
+                    const proj = projects.find((p) => p.id === e.project_id);
+                    return (
+                      <motion.button
+                        key={e.id}
+                        type="button"
+                        onClick={() => setDetailEntry(e)}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, delay: Math.min(i, 6) * 0.02 }}
+                        whileHover={{ y: -2 }}
+                        className={`block w-full text-left bg-card border border-border rounded-xl p-3 shadow-soft hover:shadow-lift transition-shadow ${e.priority === "P0" ? "border-l-4 border-l-destructive" : ""}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>{e.priority || "P2"}</Badge>
+                          {author?.photo_url ? (
+                            <img src={author.photo_url} alt="" className="h-5 w-5 rounded-full" />
+                          ) : (
+                            <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold">
+                              {(author?.name ?? author?.email ?? "?")[0]?.toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-sm text-foreground line-clamp-3">{e.content}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {proj && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted text-[10px] font-medium">
+                              {proj.emoji_icon ?? "📁"} {proj.name}
+                            </span>
+                          )}
+                          {e.deadline &&
+                            (e.completed_at ? (
+                              <Badge tone="success">Done</Badge>
+                            ) : (
+                              <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                Due {fmtDeadline(e.deadline)}
+                              </Badge>
+                            ))}
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                  {items.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                      Nothing here
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : viewMode === "person" ? (
         /* ========== GROUPED BY PERSON VIEW ========== */
         <div className="space-y-4">
           {personGroups.map((pg) => {
@@ -902,10 +1000,11 @@ function WorkLogPage() {
                           </div>
                         </div>
                         {editing ? (
-                          <Textarea
+                          <MentionTextarea
                             value={editContent}
-                            onChange={(ev) => setEditContent(ev.target.value)}
-                            className="min-h-15"
+                            onChange={setEditContent}
+                            people={profiles}
+                            minHeight="min-h-15"
                           />
                         ) : (
                           <div className="whitespace-pre-wrap text-foreground text-sm">
@@ -1061,10 +1160,11 @@ function WorkLogPage() {
                                       </span>
                                     </div>
                                     {editing ? (
-                                      <Textarea
+                                      <MentionTextarea
                                         value={editContent}
-                                        onChange={(ev) => setEditContent(ev.target.value)}
-                                        className="min-h-15"
+                                        onChange={setEditContent}
+                                        people={profiles}
+                                        minHeight="min-h-15"
                                       />
                                     ) : (
                                       <div className="whitespace-pre-wrap text-foreground text-sm">
@@ -1161,6 +1261,94 @@ function WorkLogPage() {
           </div>
         </Card>
       )}
+
+      {/* Board-card detail modal */}
+      <Modal
+        open={!!detailEntry}
+        onClose={() => setDetailEntry(null)}
+        title="Worklog entry"
+        footer={
+          detailEntry &&
+          (isAdmin || detailEntry.user_id === user?.id) && (
+            <>
+              {!detailEntry.completed_at && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    markComplete(detailEntry.id);
+                    setDetailEntry(null);
+                  }}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Mark complete
+                </Button>
+              )}
+              <Button
+                variant="danger"
+                onClick={() => {
+                  remove(detailEntry.id);
+                  setDetailEntry(null);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </Button>
+            </>
+          )
+        }
+      >
+        {detailEntry && (
+          <>
+            <div className="flex items-center gap-3">
+              {(() => {
+                const author = profiles.find((p) => p.id === detailEntry.user_id);
+                return author?.photo_url ? (
+                  <img src={author.photo_url} alt="" className="h-9 w-9 rounded-full" />
+                ) : (
+                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+                    {(author?.name ?? author?.email ?? "?")[0]?.toUpperCase()}
+                  </div>
+                );
+              })()}
+              <div>
+                <div className="text-sm font-medium text-foreground">
+                  {profiles.find((p) => p.id === detailEntry.user_id)?.name ??
+                    profiles.find((p) => p.id === detailEntry.user_id)?.email ??
+                    "—"}
+                </div>
+                <div className="font-mono text-[10px] text-muted-foreground">
+                  {fmtDateOnly(detailEntry.created_at)} · {fmtTime(detailEntry.created_at)}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge tone={TYPE_TONE[detailEntry.entry_type]}>
+                {TYPE_LABEL[detailEntry.entry_type]}
+              </Badge>
+              <Badge tone={PRIORITY_TONE[detailEntry.priority || "P2"]}>
+                {detailEntry.priority || "P2"}
+              </Badge>
+              {detailEntry.deadline &&
+                (detailEntry.completed_at ? (
+                  <Badge tone="success">Done</Badge>
+                ) : (
+                  <Badge tone={isOverdue(detailEntry.deadline) ? "danger" : "default"}>
+                    Due {fmtDeadline(detailEntry.deadline)}
+                  </Badge>
+                ))}
+              {detailEntry.deadline_updated_at && <Badge tone="warn">Deadline changed</Badge>}
+            </div>
+            <div className="whitespace-pre-wrap text-sm text-foreground">{detailEntry.content}</div>
+            {(() => {
+              const proj = projects.find((p) => p.id === detailEntry.project_id);
+              return proj ? (
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
+                  {proj.emoji_icon ?? "📁"} {proj.name}
+                </div>
+              ) : null;
+            })()}
+            <ReasonPanel logs={logsFor(detailEntry.id)} />
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

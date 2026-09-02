@@ -2,12 +2,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { PageHeader, Card, EmptyState, Input, Select, Badge, Button } from "@/components/tnq/ui";
-import { Shield, Search } from "lucide-react";
+import { Shield, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { AppRole, UserStatus } from "@/lib/tnq/types";
 
@@ -22,15 +22,20 @@ const ROLES: AppRole[] = ["super_admin", "tnq_team", "contributor", "pending"];
 const STATUSES: UserStatus[] = ["active", "pending", "suspended"];
 
 function UsersPage() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === "super_admin";
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
+  // Only show the loading placeholder on the very first fetch — background
+  // refreshes (auto-refresh interval/focus) update rows in place instead of
+  // flashing back to "Loading…", which is what was causing the page to look
+  // like it kept glitching/reloading every few seconds.
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const { data: roles } = await supabase
       .from("user_roles")
       .select("user_id,role,status")
@@ -42,6 +47,7 @@ function UsersPage() {
     const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
     setRows((roles ?? []).map((r: any) => ({ ...r, profile: pmap.get(r.user_id) ?? null })));
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();
@@ -62,13 +68,48 @@ function UsersPage() {
   );
 
   async function updateRow(user_id: string, patch: Partial<Pick<Row, "role" | "status">>) {
-    const { error } = await supabase.from("user_roles").update(patch).eq("user_id", user_id);
+    // .select() so we get back the row(s) actually changed — if RLS silently
+    // blocks the update, Postgres/PostgREST returns 0 rows rather than an
+    // error, and without this we'd show "Updated" even though nothing
+    // happened (the row then reverts on the next refresh).
+    const { data, error } = await supabase
+      .from("user_roles")
+      .update(patch)
+      .eq("user_id", user_id)
+      .select();
     if (error) {
       toast.error(error.message);
       return;
     }
+    if (!data || data.length === 0) {
+      toast.error("Nothing changed — you may not have permission to update this user.");
+      return;
+    }
     toast.success("Updated");
     setRows((rs) => rs.map((r) => (r.user_id === user_id ? { ...r, ...patch } : r)));
+  }
+  async function removeUser(user_id: string) {
+    if (
+      !confirm(
+        "Remove this user? They'll disappear from this list and lose all access immediately. This is hard to undo - there's no self-service way for them to get back in, someone would need to manually restore their role via SQL. Their past worklog/quality history is kept, not deleted.",
+      )
+    )
+      return;
+    const { data, error } = await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", user_id)
+      .select();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error("Nothing removed — you may not have permission to remove this user.");
+      return;
+    }
+    toast.success("User removed");
+    setRows((rs) => rs.filter((r) => r.user_id !== user_id));
   }
 
   if (!isAdmin) {
@@ -211,6 +252,16 @@ function UsersPage() {
                           onClick={() => updateRow(r.user_id, { status: "active" })}
                         >
                           Reactivate
+                        </Button>
+                      )}
+                      {r.user_id !== user?.id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Remove user"
+                          onClick={() => removeUser(r.user_id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </td>

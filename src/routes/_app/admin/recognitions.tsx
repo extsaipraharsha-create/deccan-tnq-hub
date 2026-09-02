@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader, Card, Button, Field, Modal, EmptyState } from "@/components/tnq/ui";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { Confetti } from "@/components/tnq/Confetti";
@@ -65,9 +65,10 @@ function RecognitionsPage() {
     message: "",
   });
   const [celebrate, setCelebrate] = useState(0);
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const [{ data: r }, { data: p }] = await Promise.all([
       (supabase as any)
         .from("recognitions")
@@ -78,6 +79,7 @@ function RecognitionsPage() {
     setItems((r as Recognition[]) ?? []);
     setProfiles((p as Prof[]) ?? []);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

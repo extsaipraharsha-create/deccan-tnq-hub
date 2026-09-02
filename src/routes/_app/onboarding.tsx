@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader, Card, Button, Badge } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
@@ -19,10 +19,11 @@ function OnboardingPage() {
   const [stage, setStage] = useState(1);
   const [status, setStatus] = useState("not_started");
   const [loading, setLoading] = useState(true);
+  const loadedOnce = useRef(false);
 
   async function load() {
     if (!user) return;
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const { data } = await supabase
       .from("contributors")
       .select("onboarding_stage,onboarding_status")
@@ -37,6 +38,7 @@ function OnboardingPage() {
         .insert({ id: user.id, onboarding_stage: 1, onboarding_status: "not_started" });
     }
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

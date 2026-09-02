@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader, Card, EmptyState, Badge, Button } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
@@ -29,10 +29,11 @@ function MyLearningPage() {
   const [modules, setModules] = useState<Module[]>([]);
   const [progress, setProgress] = useState<Progress[]>([]);
   const [loading, setLoading] = useState(true);
+  const loadedOnce = useRef(false);
 
   async function load() {
     if (!user) return;
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const { data: c } = await supabase
       .from("contributors")
       .select("learning_path_id")
@@ -41,6 +42,7 @@ function MyLearningPage() {
     const pid = (c as any)?.learning_path_id;
     if (!pid) {
       setLoading(false);
+      loadedOnce.current = true;
       return;
     }
     const [{ data: p }, { data: m }, { data: pr }] = await Promise.all([
@@ -59,6 +61,7 @@ function MyLearningPage() {
     setModules((m as Module[]) ?? []);
     setProgress((pr as Progress[]) ?? []);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

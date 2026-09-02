@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   PageHeader,
   Card,
@@ -48,9 +48,10 @@ function SourcesPage() {
     source_type: "doc",
     url: "",
   });
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const [{ data: s }, { data: p }, { data: pr }] = await Promise.all([
       supabase.from("admin_sources").select("*").order("created_at", { ascending: false }),
       supabase.from("projects").select("id,name").order("name"),
@@ -60,6 +61,7 @@ function SourcesPage() {
     setProjects((p as Proj[]) ?? []);
     setProfiles((pr as Prof[]) ?? []);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

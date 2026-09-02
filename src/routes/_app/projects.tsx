@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable prettier/prettier */
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -104,9 +104,10 @@ function ProjectsPage() {
   const [form, setForm] = useState<Partial<Project>>({});
   const [tab, setTab] = useState<"all" | "active" | "paused" | "completed">("all");
   const [q, setQ] = useState("");
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const { data } = await supabase
       .from("projects")
       .select("*")
@@ -125,6 +126,7 @@ function ProjectsPage() {
       setSmes((profs ?? []) as any);
     }
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

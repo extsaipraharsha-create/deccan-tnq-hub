@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -42,15 +42,17 @@ function ResourcesPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<Resource> & { tagsInput?: string }>({});
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const { data } = await supabase
       .from("resources")
       .select("*")
       .order("date", { ascending: false });
     setItems((data as Resource[]) ?? []);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

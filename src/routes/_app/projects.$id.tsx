@@ -2,7 +2,7 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -151,12 +151,13 @@ function ProjectDetail() {
   const [addCoOwner, setAddCoOwner] = useState<{ userId: string; workingOn: string } | null>(
     null,
   );
+  const loadedOnce = useRef(false);
 
   const canWrite =
     role === "super_admin" || role === "tnq_team" || project?.sme_owner_id === user?.id;
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const { data: p } = await supabase.from("projects").select("*").eq("id", id).maybeSingle();
     setProject(p as any);
     setName((p as any)?.name ?? "");
@@ -189,8 +190,10 @@ function ProjectDetail() {
       .limit(100);
     setActivity(a ?? []);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
+    loadedOnce.current = false;
     load();
   }, [id]);
   // Skip auto-refetch while the header form is open so it can't clobber

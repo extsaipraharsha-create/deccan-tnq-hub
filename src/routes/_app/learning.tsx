@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -320,9 +320,10 @@ function WorkspacePage() {
 
   // assigned project ids for contributors
   const [assignedProjectIds, setAssignedProjectIds] = useState<string[] | null>(null);
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const [{ data: pjs }, { data: pgs }, { data: lps }, { data: pfs }] = await Promise.all([
       supabase.from("projects").select("id,name,audience_type,status").order("name"),
       (supabase as any)
@@ -339,6 +340,7 @@ function WorkspacePage() {
     setProfiles((pfs as Profile[]) ?? []);
     setAssignedProjectIds(null);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

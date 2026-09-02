@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader, Card, Input, Select, Badge, EmptyState, Button } from "@/components/tnq/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
@@ -28,9 +28,10 @@ function ContributorsPage() {
   const [profiles, setProfiles] = useState<Prof[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const [{ data: c }, { data: p }, { data: ur }] = await Promise.all([
       supabase.from("contributors").select("*"),
       supabase.from("profiles").select("id,name,email"),
@@ -47,6 +48,7 @@ function ContributorsPage() {
       })),
     );
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

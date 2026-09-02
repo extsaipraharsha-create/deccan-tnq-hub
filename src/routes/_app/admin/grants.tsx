@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   PageHeader,
   Card,
@@ -42,9 +42,10 @@ function GrantsPage() {
     resource_id: "",
     permission: "view_only",
   });
+  const loadedOnce = useRef(false);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     const [{ data: g }, { data: p }] = await Promise.all([
       supabase.from("resource_grants").select("*").order("granted_at", { ascending: false }),
       supabase.from("profiles").select("id,name,email").order("name"),
@@ -52,6 +53,7 @@ function GrantsPage() {
     setGrants((g as Grant[]) ?? []);
     setProfiles((p as Prof[]) ?? []);
     setLoading(false);
+    loadedOnce.current = true;
   }
   useEffect(() => {
     load();

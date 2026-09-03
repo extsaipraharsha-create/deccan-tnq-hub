@@ -37,6 +37,43 @@ export type IconType = React.ComponentType<{ className?: string }>;
 export type NavItem = { label: string; to: string; icon: IconType };
 export type NavSection = { label: string; items: NavItem[]; admin?: boolean };
 
+// Shared by "tnq_team" and "deccan_team" - the latter is a separate,
+// distinctly-labeled category with identical access, not a different
+// permission level.
+const TNQ_TEAM_NAV: NavSection[] = [
+  {
+    label: "OVERVIEW",
+    items: [
+      { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
+      { label: "Work Log", to: "/worklog", icon: MessageSquare },
+      { label: "My Report", to: "/my-report", icon: FileBarChart },
+    ],
+  },
+  {
+    label: "OPERATIONS",
+    items: [
+      { label: "My Projects", to: "/projects", icon: FolderKanban },
+      { label: "Quality Reviews", to: "/quality", icon: ClipboardCheck },
+      { label: "Onboarding", to: "/onboarding", icon: Activity },
+      { label: "Newcomers", to: "/newcomers", icon: GraduationCap },
+    ],
+  },
+  {
+    label: "TEAM MANAGEMENT",
+    items: [
+      { label: "Team Directory", to: "/team", icon: Users2 },
+      { label: "Contributors", to: "/contributors", icon: Users },
+    ],
+  },
+  {
+    label: "CONTENT",
+    items: [
+      { label: "Workspace", to: "/learning", icon: BookOpen },
+      { label: "Resources", to: "/resources", icon: Library },
+    ],
+  },
+];
+
 export const NAV: Record<AppRole, NavSection[]> = {
   contributor: [
     { label: "OVERVIEW", items: [{ label: "Dashboard", to: "/dashboard", icon: LayoutDashboard }] },
@@ -63,39 +100,8 @@ export const NAV: Record<AppRole, NavSection[]> = {
       ],
     },
   ],
-  tnq_team: [
-    {
-      label: "OVERVIEW",
-      items: [
-        { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
-        { label: "Work Log", to: "/worklog", icon: MessageSquare },
-        { label: "My Report", to: "/my-report", icon: FileBarChart },
-      ],
-    },
-    {
-      label: "OPERATIONS",
-      items: [
-        { label: "My Projects", to: "/projects", icon: FolderKanban },
-        { label: "Quality Reviews", to: "/quality", icon: ClipboardCheck },
-        { label: "Onboarding", to: "/onboarding", icon: Activity },
-        { label: "Newcomers", to: "/newcomers", icon: GraduationCap },
-      ],
-    },
-    {
-      label: "TEAM MANAGEMENT",
-      items: [
-        { label: "Team Directory", to: "/team", icon: Users2 },
-        { label: "Contributors", to: "/contributors", icon: Users },
-      ],
-    },
-    {
-      label: "CONTENT",
-      items: [
-        { label: "Workspace", to: "/learning", icon: BookOpen },
-        { label: "Resources", to: "/resources", icon: Library },
-      ],
-    },
-  ],
+  tnq_team: TNQ_TEAM_NAV,
+  deccan_team: TNQ_TEAM_NAV,
   super_admin: [
     { label: "OVERVIEW", items: [{ label: "Dashboard", to: "/dashboard", icon: LayoutDashboard }] },
     {

@@ -23,6 +23,7 @@ import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
 import { Card, StatCard, EmptyState, StatusPill, Badge } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
+import { isTeamRole, type AppRole } from "@/lib/tnq/types";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
@@ -34,7 +35,7 @@ function Dashboard() {
   const heroTitle =
     role === "super_admin"
       ? "Platform control center."
-      : role === "tnq_team"
+      : isTeamRole(role)
         ? "Your team at a glance."
         : "Your learning journey.";
 
@@ -55,7 +56,7 @@ function Dashboard() {
         <div className="space-y-8 min-w-0">
           <NeedsReviewWidget />
           {role === "contributor" && <ContributorDash dose={dose} />}
-          {role === "tnq_team" && <SmeDash dose={dose} />}
+          {isTeamRole(role) && <SmeDash dose={dose} />}
           {role === "super_admin" && <AdminDash dose={dose} />}
           <QualityByProject role={role} />
         </div>
@@ -91,7 +92,7 @@ function WallOfExcellence() {
   >([]);
   const [celebrate, setCelebrate] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
-  const canGive = role === "super_admin" || role === "tnq_team";
+  const canGive = role === "super_admin" || isTeamRole(role);
   const seenIds = useRef<Set<string> | null>(null);
 
   const load = async () => {
@@ -238,7 +239,7 @@ type QProj = {
   emoji_icon: string | null;
   current_owner_ids: string[] | null;
 };
-function QualityByProject({ role }: { role: string | null }) {
+function QualityByProject({ role }: { role: AppRole | null }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<QProj[]>([]);
@@ -277,7 +278,7 @@ function QualityByProject({ role }: { role: string | null }) {
   useAutoRefresh(load);
 
   const visible = useMemo(() => {
-    if (role === "tnq_team")
+    if (isTeamRole(role))
       return projects.filter(
         (p) => p.sme_owner_id === user?.id || (p.current_owner_ids ?? []).includes(user?.id ?? ""),
       );
@@ -706,6 +707,7 @@ function AdminDash({ dose }: { dose: string }) {
             {[
               { key: "super_admin", label: "SUPER ADMIN", cls: "bg-foreground text-background" },
               { key: "tnq_team", label: "TNQ TEAM", cls: "bg-orange-100 text-orange-800" },
+              { key: "deccan_team", label: "DECCAN TEAM", cls: "bg-emerald-100 text-emerald-800" },
               { key: "viewer", label: "VIEWER", cls: "bg-sky-100 text-sky-800" },
               { key: "contributor", label: "CONTRIBUTOR", cls: "bg-violet-100 text-violet-800" },
               { key: "pending", label: "PENDING", cls: "bg-amber-100 text-amber-800" },

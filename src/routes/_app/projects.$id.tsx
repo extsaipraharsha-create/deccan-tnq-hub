@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { isTeamRole } from "@/lib/tnq/types";
 import {
   Card,
   Badge,
@@ -158,7 +159,7 @@ function ProjectDetail() {
   const loadedOnce = useRef(false);
 
   const canWrite =
-    role === "super_admin" || role === "tnq_team" || project?.sme_owner_id === user?.id;
+    role === "super_admin" || isTeamRole(role) || project?.sme_owner_id === user?.id;
 
   async function load() {
     if (!loadedOnce.current) setLoading(true);

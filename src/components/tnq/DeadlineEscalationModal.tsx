@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Modal, Button, Select, Input, Textarea } from "@/components/tnq/ui";
+import { isTeamRole } from "@/lib/tnq/types";
 import { toast } from "sonner";
 
 type OverdueEntry = { id: string; content: string; deadline: string };
@@ -17,7 +18,7 @@ const REASONS = ["Blocked", "Underestimated", "Waiting on someone", "Other"];
 // re-popping immediately, so it stays out of the way once seen.
 export function DeadlineEscalationModal() {
   const { user, role } = useAuth();
-  const canHaveDeadlines = role === "super_admin" || role === "tnq_team";
+  const canHaveDeadlines = role === "super_admin" || isTeamRole(role);
   const [queue, setQueue] = useState<OverdueEntry[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<"choice" | "reschedule">("choice");

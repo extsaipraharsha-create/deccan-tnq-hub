@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { isTeamRole } from "@/lib/tnq/types";
 import {
   PageHeader,
   Card,
@@ -297,7 +298,7 @@ function RowMenu({
 // ===================================================================
 function WorkspacePage() {
   const { role, user, profile } = useAuth();
-  const canWrite = role === "super_admin" || role === "tnq_team";
+  const canWrite = role === "super_admin" || isTeamRole(role);
   const canDelete = role === "super_admin";
   const isContributor = role === "contributor";
 

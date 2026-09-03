@@ -37,6 +37,7 @@ export function formatDateLong(d: Date = new Date()) {
 export const ROLE_LABEL: Record<string, string> = {
   super_admin: "SUPER ADMIN",
   tnq_team: "SME",
+  deccan_team: "DECCAN TEAM",
   contributor: "CONTRIBUTOR",
   pending: "PENDING",
 };
@@ -44,6 +45,7 @@ export const ROLE_LABEL: Record<string, string> = {
 export const ROLE_ACCENT: Record<string, string> = {
   super_admin: "var(--color-role-admin)",
   tnq_team: "var(--color-role-sme)",
+  deccan_team: "var(--color-role-deccan)",
   contributor: "var(--color-role-contributor)",
   pending: "var(--color-muted-foreground)",
 };

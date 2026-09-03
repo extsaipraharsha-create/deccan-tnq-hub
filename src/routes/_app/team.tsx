@@ -58,10 +58,14 @@ function TeamPage() {
   }, []);
   useAutoRefresh(load);
 
-  // SME = tnq_team or super_admin
+  // SME = tnq_team, deccan_team, or super_admin
   const smes = useMemo(() => {
     const smeIds = new Set(
-      roles.filter((r) => r.role === "super_admin" || r.role === "tnq_team").map((r) => r.user_id),
+      roles
+        .filter(
+          (r) => r.role === "super_admin" || r.role === "tnq_team" || r.role === "deccan_team",
+        )
+        .map((r) => r.user_id),
     );
     return profiles.filter((p) => smeIds.has(p.id));
   }, [profiles, roles]);

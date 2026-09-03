@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
 import { undoableAction } from "@/lib/tnq/confirm-toast";
+import { isTeamRole } from "@/lib/tnq/types";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { WorklogReport } from "@/components/tnq/WorklogReport";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
@@ -296,7 +297,7 @@ function toDatetimeLocal(iso: string) {
 function WorkLogPage() {
   const { user, role } = useAuth();
   const isAdmin = role === "super_admin";
-  const canPost = role === "super_admin" || role === "tnq_team";
+  const canPost = role === "super_admin" || isTeamRole(role);
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
@@ -1321,7 +1322,7 @@ function WorkLogPage() {
                                         profiles={profiles}
                                         currentUserId={user?.id}
                                         isAdmin={isAdmin}
-                                        canComment={isAdmin || role === "tnq_team"}
+                                        canComment={isAdmin || isTeamRole(role)}
                                         onAdd={(body) => addComment(e.id, body)}
                                         onDelete={deleteComment}
                                       />
@@ -1451,7 +1452,7 @@ function WorkLogPage() {
                     const proj = projects.find((p) => p.id === e.project_id);
                     const isOwn = e.user_id === user?.id;
                     const canModerate = isAdmin;
-                    const canComment = isAdmin || role === "tnq_team" || isOwn;
+                    const canComment = isAdmin || isTeamRole(role) || isOwn;
                     const entryComments = commentsFor(e.id);
                     const editing = editId === e.id;
                     return (
@@ -1716,7 +1717,7 @@ function WorkLogPage() {
                                 const proj = projects.find((p) => p.id === e.project_id);
                                 const isOwn = e.user_id === user?.id;
                                 const canModerate = isAdmin;
-                                const canComment = isAdmin || role === "tnq_team" || isOwn;
+                                const canComment = isAdmin || isTeamRole(role) || isOwn;
                                 const entryComments = commentsFor(e.id);
                                 const editing = editId === e.id;
                                 return (
@@ -2027,7 +2028,7 @@ function WorkLogPage() {
                 currentUserId={user?.id}
                 isAdmin={isAdmin}
                 canComment={
-                  isAdmin || role === "tnq_team" || detailEntry.user_id === user?.id
+                  isAdmin || isTeamRole(role) || detailEntry.user_id === user?.id
                 }
                 onAdd={(body) => addComment(detailEntry.id, body)}
                 onDelete={deleteComment}

@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { isTeamRole } from "@/lib/tnq/types";
 import { WorklogReport } from "@/components/tnq/WorklogReport";
 import {
   Plus,
@@ -82,7 +83,7 @@ function scoreTone(s: number | null): "success" | "warn" | "danger" | "default" 
 
 function QualityPage() {
   const { user, role } = useAuth();
-  const canWrite = role === "super_admin" || role === "tnq_team";
+  const canWrite = role === "super_admin" || isTeamRole(role);
   const [scores, setScores] = useState<Score[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [profiles, setProfiles] = useState<Prof[]>([]);

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { isTeamRole } from "@/lib/tnq/types";
 import {
   PageHeader,
   Card,
@@ -37,7 +38,7 @@ const CATEGORIES: Resource["category"][] = [
 
 function ResourcesPage() {
   const { role, user } = useAuth();
-  const canWrite = role === "super_admin" || role === "tnq_team";
+  const canWrite = role === "super_admin" || isTeamRole(role);
   const [items, setItems] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -66,7 +67,7 @@ function ResourcesPage() {
       url: "",
       file_type: "",
       tagsInput: "",
-      visible_to: ["super_admin", "tnq_team", "contributor"],
+      visible_to: ["super_admin", "tnq_team", "deccan_team", "contributor"],
     });
     setOpen(true);
   }
@@ -85,7 +86,7 @@ function ResourcesPage() {
       url: form.url.trim(),
       file_type: form.file_type || null,
       tags,
-      visible_to: form.visible_to ?? ["super_admin", "tnq_team", "contributor"],
+      visible_to: form.visible_to ?? ["super_admin", "tnq_team", "deccan_team", "contributor"],
       uploaded_by: user?.id ?? null,
     });
     if (error) {

@@ -18,7 +18,7 @@ type Row = {
   profile: { name: string | null; email: string | null; photo_url: string | null } | null;
 };
 
-const ROLES: AppRole[] = ["super_admin", "tnq_team", "contributor", "pending"];
+const ROLES: AppRole[] = ["super_admin", "tnq_team", "deccan_team", "contributor", "pending"];
 const STATUSES: UserStatus[] = ["active", "pending", "suspended"];
 
 function UsersPage() {
@@ -72,9 +72,12 @@ function UsersPage() {
     // blocks the update, Postgres/PostgREST returns 0 rows rather than an
     // error, and without this we'd show "Updated" even though nothing
     // happened (the row then reverts on the next refresh).
+    // Generated Supabase types don't know about "deccan_team" yet (it's a
+    // newer role, not in the last type-gen snapshot) - cast, same as the
+    // rest of the codebase does for tables/values ahead of the schema cache.
     const { data, error } = await supabase
       .from("user_roles")
-      .update(patch)
+      .update(patch as any)
       .eq("user_id", user_id)
       .select();
     if (error) {

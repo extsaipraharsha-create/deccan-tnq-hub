@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { isTeamRole } from "@/lib/tnq/types";
 import {
   Card,
   EmptyState,
@@ -96,7 +97,7 @@ function Avatars({ ids, smes }: { ids: string[]; smes: SmeOption[] }) {
 
 function ProjectsPage() {
   const { role, user } = useAuth();
-  const canWrite = role === "super_admin" || role === "tnq_team";
+  const canWrite = role === "super_admin" || isTeamRole(role);
   const [items, setItems] = useState<Project[]>([]);
   const [smes, setSmes] = useState<SmeOption[]>([]);
   const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
@@ -118,7 +119,7 @@ function ProjectsPage() {
     const { data: smeRoles } = await supabase
       .from("user_roles")
       .select("user_id")
-      .in("role", ["super_admin", "tnq_team"]);
+      .in("role", ["super_admin", "tnq_team", "deccan_team"] as any);
     const ids = (smeRoles ?? []).map((r) => r.user_id);
     if (ids.length) {
       const { data: profs } = await supabase

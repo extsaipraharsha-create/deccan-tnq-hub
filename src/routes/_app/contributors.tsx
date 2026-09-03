@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader, Card, Input, Select, Badge, EmptyState, Button } from "@/components/tnq/ui";
@@ -35,7 +36,12 @@ function ContributorsPage() {
     const [{ data: c }, { data: p }, { data: ur }] = await Promise.all([
       supabase.from("contributors").select("*"),
       supabase.from("profiles").select("id,name,email"),
-      supabase.from("user_roles").select("user_id,role").in("role", ["tnq_team", "super_admin"]),
+      // "deccan_team" isn't in the generated role enum yet - cast, same
+      // convention used elsewhere for values ahead of the schema cache.
+      supabase
+        .from("user_roles")
+        .select("user_id,role")
+        .in("role", ["tnq_team", "deccan_team", "super_admin"] as any),
     ]);
     const pmap = new Map(((p as Prof[]) ?? []).map((x) => [x.id, x]));
     setProfiles((p as Prof[]) ?? []);

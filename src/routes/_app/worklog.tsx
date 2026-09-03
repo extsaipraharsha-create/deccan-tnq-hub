@@ -410,15 +410,23 @@ function WorkLogPage() {
           .from("work_log_comments")
           .select("*")
           .order("created_at", { ascending: true }),
-        supabase.from("user_roles").select("user_id,role"),
+        supabase.from("user_roles").select("user_id,role,status"),
       ]);
     setEntries((e as any) ?? []);
     setProfiles((p as any) ?? []);
     setProjects((pr as any) ?? []);
     setDelayLogs((dl as DelayLog[]) ?? []);
     setComments((cm as Comment[]) ?? []);
-    const roleRows = (ur as { user_id: string; role: string }[]) ?? [];
-    setActiveUserIds(new Set(roleRows.map((r) => r.user_id)));
+    const roleRows = (ur as { user_id: string; role: string; status: string }[]) ?? [];
+    // "Active" here means pickable/mentionable right now, not just "has a
+    // role row" - a still-pending (not yet approved) or suspended account
+    // has a row too, but can't access the app, so it shouldn't show up as
+    // someone you can @mention or assign a review to.
+    setActiveUserIds(
+      new Set(
+        roleRows.filter((r) => r.role !== "pending" && r.status === "active").map((r) => r.user_id),
+      ),
+    );
     setRoleByUser(new Map(roleRows.map((r) => [r.user_id, r.role])));
   }
   useEffect(() => {
@@ -518,19 +526,23 @@ function WorkLogPage() {
       .select();
     if (error) return toast.error(error.message);
     const insertedEntries = (inserted as any as Entry[]) ?? [];
-    for (let i = 0; i < activeTasks.length; i++) {
-      const t = activeTasks[i];
-      const entry = insertedEntries[i];
-      await supabase.from("activity_log").insert({
+    await supabase.from("activity_log").insert(
+      activeTasks.map((t) => ({
         user_id: user?.id ?? "",
         action: "worklog_post",
         action_type: "work_log",
         details: { type: t.entryType },
-      } as any);
-      if (t.entryType === "review_needed" && t.reviewerId && entry) {
-        await requestReview(entry.id, t.reviewerId);
-      }
-    }
+      })) as any,
+    );
+    await Promise.all(
+      activeTasks.map((t, i) => {
+        const entry = insertedEntries[i];
+        if (t.entryType === "review_needed" && t.reviewerId && entry) {
+          return requestReview(entry.id, t.reviewerId);
+        }
+        return Promise.resolve();
+      }),
+    );
     setTasks([blankTask()]);
     toast.success(activeTasks.length > 1 ? `Posted ${activeTasks.length} updates` : "Posted");
   }

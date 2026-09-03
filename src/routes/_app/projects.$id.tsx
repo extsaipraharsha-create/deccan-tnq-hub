@@ -235,16 +235,18 @@ function ProjectDetail() {
       } as any)
       .eq("id", id);
     if (error) return toast.error(error.message);
-    for (const c of changes) {
-      await supabase.from("activity_log").insert({
-        user_id: user?.id ?? "",
-        action: "field_updated",
-        action_type: "project_update",
-        target: id,
-        field_changed: c.field,
-        old_value: c.old,
-        new_value: c.next,
-      } as any);
+    if (changes.length > 0) {
+      await supabase.from("activity_log").insert(
+        changes.map((c) => ({
+          user_id: user?.id ?? "",
+          action: "field_updated",
+          action_type: "project_update",
+          target: id,
+          field_changed: c.field,
+          old_value: c.old,
+          new_value: c.next,
+        })) as any,
+      );
     }
     toast.success("Updated");
     setEditHeader(false);

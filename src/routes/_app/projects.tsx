@@ -198,20 +198,21 @@ function ProjectsPage() {
         "links",
         "auditing_status",
       ];
-      for (const f of FIELDS) {
+      const changes = FIELDS.filter((f) => {
         const oldV = (editing as any)[f] ?? "";
         const newV = (payload as any)[f] ?? "";
-        if (String(oldV) !== String(newV)) {
-          await supabase.from("activity_log").insert({
-            user_id: user?.id ?? "",
-            action: "field_updated",
-            action_type: "project_update",
-            target: editing.id,
-            field_changed: f as string,
-            old_value: String(oldV),
-            new_value: String(newV),
-          } as any);
-        }
+        return String(oldV) !== String(newV);
+      }).map((f) => ({
+        user_id: user?.id ?? "",
+        action: "field_updated",
+        action_type: "project_update",
+        target: editing.id,
+        field_changed: f as string,
+        old_value: String((editing as any)[f] ?? ""),
+        new_value: String((payload as any)[f] ?? ""),
+      }));
+      if (changes.length > 0) {
+        await supabase.from("activity_log").insert(changes as any);
       }
     }
     const res = editing

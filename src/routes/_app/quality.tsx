@@ -105,13 +105,21 @@ function QualityPage() {
           .from("projects")
           .select("id,name,status,audience_type,version,tasking_live,current_owner_ids,emoji_icon")
           .order("name"),
-        supabase.from("user_roles").select("user_id"),
+        supabase.from("user_roles").select("user_id,role,status"),
       ]);
     setScores((sc as any) ?? []);
     setIssues((is as any) ?? []);
     setProfiles((pr as any) ?? []);
     setProjects((pj as any) ?? []);
-    setActiveUserIds(new Set(((ur as { user_id: string }[]) ?? []).map((r) => r.user_id)));
+    // "Active" = pickable right now, not just "has a role row" - a still
+    // pending (not yet approved) or suspended account shouldn't show up in
+    // the contributor pickers or the By Person tab.
+    const roleRows = (ur as { user_id: string; role: string; status: string }[]) ?? [];
+    setActiveUserIds(
+      new Set(
+        roleRows.filter((r) => r.role !== "pending" && r.status === "active").map((r) => r.user_id),
+      ),
+    );
   }
   useEffect(() => {
     load();

@@ -141,6 +141,15 @@ const BOARD_ORDER: EntryType[] = [
   "available_to_help",
 ];
 
+// super_admin is mostly an oversight role, not a working team member, so the
+// Team Roster hides super_admins by default — except this explicit allow-list
+// for admins who are still active, day-to-day contributors. Add a user id
+// here (with a name/email comment) if that ever changes; per Sai Praharsha's
+// instruction, 2026-09-03.
+const ROSTER_ADMIN_EXCEPTIONS = new Set<string>([
+  "b3004931-4129-4b79-84cd-a79ce1c9f4a2", // Sai Praharsha — ext.saipraharsha@deccan.ai
+]);
+
 const PRIORITY_LIST = [
   { key: "P0" as const, label: "P0-Critical" },
   { key: "P1" as const, label: "P1-High" },
@@ -228,7 +237,7 @@ function CommentPanel({
                 )}
               </div>
             </div>
-            <div className="mt-0.5 text-foreground whitespace-pre-wrap">{c.body}</div>
+            <div className="mt-0.5 text-foreground whitespace-pre-wrap break-words">{c.body}</div>
           </div>
         ))
       )}
@@ -292,6 +301,8 @@ function WorkLogPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activeUserIds, setActiveUserIds] = useState<Set<string>>(new Set());
+  const [roleByUser, setRoleByUser] = useState<Map<string, string>>(new Map());
   const [projects, setProjects] = useState<Project[]>([]);
   const [delayLogs, setDelayLogs] = useState<DelayLog[]>([]);
   const [openReasonId, setOpenReasonId] = useState<string | null>(null);
@@ -386,24 +397,29 @@ function WorkLogPage() {
   }
 
   async function load() {
-    const [{ data: e }, { data: p }, { data: pr }, { data: dl }, { data: cm }] = await Promise.all([
-      supabase.from("work_log_entries").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("id,name,email,photo_url"),
-      supabase.from("projects").select("id,name,emoji_icon"),
-      (supabase as any)
-        .from("work_log_delay_log")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      (supabase as any)
-        .from("work_log_comments")
-        .select("*")
-        .order("created_at", { ascending: true }),
-    ]);
+    const [{ data: e }, { data: p }, { data: pr }, { data: dl }, { data: cm }, { data: ur }] =
+      await Promise.all([
+        supabase.from("work_log_entries").select("*").order("created_at", { ascending: false }),
+        supabase.from("profiles").select("id,name,email,photo_url"),
+        supabase.from("projects").select("id,name,emoji_icon"),
+        (supabase as any)
+          .from("work_log_delay_log")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        (supabase as any)
+          .from("work_log_comments")
+          .select("*")
+          .order("created_at", { ascending: true }),
+        supabase.from("user_roles").select("user_id,role"),
+      ]);
     setEntries((e as any) ?? []);
     setProfiles((p as any) ?? []);
     setProjects((pr as any) ?? []);
     setDelayLogs((dl as DelayLog[]) ?? []);
     setComments((cm as Comment[]) ?? []);
+    const roleRows = (ur as { user_id: string; role: string }[]) ?? [];
+    setActiveUserIds(new Set(roleRows.map((r) => r.user_id)));
+    setRoleByUser(new Map(roleRows.map((r) => [r.user_id, r.role])));
   }
   useEffect(() => {
     load();
@@ -714,11 +730,21 @@ function WorkLogPage() {
     return map;
   }, [filtered]);
 
-  // Team Roster: every worklog author except the viewer themself — generic
-  // by "has entries", not filtered by role, so it keeps working unchanged
-  // once contributor accounts exist. Built from the already-fetched
-  // `entries` (not the entry-level `filtered`), since the roster has its
-  // own search/project filter below.
+  // People who still have an account (weren't removed via Admin > Users).
+  // Used for pickers (mentions, reviewer select, roster) so a removed
+  // person drops out of every "who's on the team" surface, while their
+  // past entries/comments still show their name as historical authorship.
+  const activeProfiles = useMemo(
+    () => profiles.filter((p) => activeUserIds.has(p.id)),
+    [profiles, activeUserIds],
+  );
+
+  // Team Roster: every worklog author, including the viewer themself — so
+  // everyone can check their own status/heatmap alongside the team's, not
+  // just everyone else's. Generic by "has entries", not filtered by role,
+  // so it keeps working unchanged once contributor accounts exist. Built
+  // from the already-fetched `entries` (not the entry-level `filtered`),
+  // since the roster has its own search/project filter below.
   type RosterPerson = {
     userId: string;
     entries: Entry[];
@@ -731,7 +757,9 @@ function WorkLogPage() {
   const roster: RosterPerson[] = useMemo(() => {
     const byUser = new Map<string, Entry[]>();
     for (const e of entries) {
-      if (e.user_id === user?.id) continue;
+      if (!activeUserIds.has(e.user_id)) continue;
+      const isAdminRole = roleByUser.get(e.user_id) === "super_admin";
+      if (isAdminRole && !ROSTER_ADMIN_EXCEPTIONS.has(e.user_id)) continue;
       const arr = byUser.get(e.user_id) ?? [];
       arr.push(e);
       byUser.set(e.user_id, arr);
@@ -768,7 +796,7 @@ function WorkLogPage() {
     }
     out.sort((a, b) => a.status.localeCompare(b.status));
     return out;
-  }, [entries, user?.id]);
+  }, [entries, activeUserIds, roleByUser]);
 
   const filteredRoster = useMemo(() => {
     const q = rosterSearch.trim().toLowerCase();
@@ -888,7 +916,7 @@ function WorkLogPage() {
                   <MentionTextarea
                     value={t.content}
                     onChange={(v) => updateTask(i, { content: v.slice(0, 500) })}
-                    people={profiles}
+                    people={activeProfiles}
                     placeholder="e.g. Reviewing Playground content for Agent Mode project… Type @ to mention someone."
                     minHeight="min-h-15"
                   />
@@ -948,7 +976,7 @@ function WorkLogPage() {
                         }`}
                       >
                         <option value="">— Pick a reviewer (required) —</option>
-                        {profiles
+                        {activeProfiles
                           .filter((p) => p.id !== user?.id)
                           .map((p) => (
                             <option key={p.id} value={p.id}>
@@ -1172,8 +1200,15 @@ function WorkLogPage() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">
-                          {prof?.name ?? prof?.email ?? "—"}
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-sm font-medium text-foreground truncate">
+                            {prof?.name ?? prof?.email ?? "—"}
+                          </div>
+                          {p.userId === user?.id && (
+                            <span className="shrink-0 font-mono text-[10px] font-semibold tracking-wider text-primary uppercase">
+                              You
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
                           {p.heatmap.map((h) => (
@@ -1236,7 +1271,7 @@ function WorkLogPage() {
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="text-sm text-foreground whitespace-pre-wrap">
+                                    <div className="text-sm text-foreground whitespace-pre-wrap break-words">
                                       {e.content}
                                     </div>
                                     {proj && (
@@ -1258,13 +1293,15 @@ function WorkLogPage() {
                                           </span>
                                         )}
                                       </button>
-                                      <button
-                                        onClick={() => sendNudge(e.id, p.userId)}
-                                        title="Nudge"
-                                        className="p-1 text-muted-foreground hover:text-primary"
-                                      >
-                                        <Zap className="h-3.5 w-3.5" />
-                                      </button>
+                                      {p.userId !== user?.id && (
+                                        <button
+                                          onClick={() => sendNudge(e.id, p.userId)}
+                                          title="Nudge"
+                                          className="p-1 text-muted-foreground hover:text-primary"
+                                        >
+                                          <Zap className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
                                     </div>
                                     {openCommentId === e.id && (
                                       <CommentPanel
@@ -1450,7 +1487,7 @@ function WorkLogPage() {
                                     className="h-7! text-xs! w-auto!"
                                   >
                                     <option value="">— Reviewer (required) —</option>
-                                    {profiles
+                                    {activeProfiles
                                       .filter((pr) => pr.id !== user?.id)
                                       .map((pr) => (
                                         <option key={pr.id} value={pr.id}>
@@ -1562,11 +1599,11 @@ function WorkLogPage() {
                           <MentionTextarea
                             value={editContent}
                             onChange={setEditContent}
-                            people={profiles}
+                            people={activeProfiles}
                             minHeight="min-h-15"
                           />
                         ) : (
-                          <div className="whitespace-pre-wrap text-foreground text-sm">
+                          <div className="whitespace-pre-wrap break-words text-foreground text-sm">
                             {e.content}
                           </div>
                         )}
@@ -1724,7 +1761,7 @@ function WorkLogPage() {
                                                   className="h-7! text-xs! w-auto!"
                                                 >
                                                   <option value="">— Reviewer (required) —</option>
-                                                  {profiles
+                                                  {activeProfiles
                                                     .filter((pr) => pr.id !== user?.id)
                                                     .map((pr) => (
                                                       <option key={pr.id} value={pr.id}>
@@ -1753,11 +1790,11 @@ function WorkLogPage() {
                                       <MentionTextarea
                                         value={editContent}
                                         onChange={setEditContent}
-                                        people={profiles}
+                                        people={activeProfiles}
                                         minHeight="min-h-15"
                                       />
                                     ) : (
-                                      <div className="whitespace-pre-wrap text-foreground text-sm">
+                                      <div className="whitespace-pre-wrap break-words text-foreground text-sm">
                                         {e.content}
                                       </div>
                                     )}
@@ -1956,7 +1993,9 @@ function WorkLogPage() {
                 ))}
               {detailEntry.deadline_updated_at && <Badge tone="warn">Deadline changed</Badge>}
             </div>
-            <div className="whitespace-pre-wrap text-sm text-foreground">{detailEntry.content}</div>
+            <div className="whitespace-pre-wrap break-words text-sm text-foreground">
+              {detailEntry.content}
+            </div>
             {(() => {
               const proj = projects.find((p) => p.id === detailEntry.project_id);
               return proj ? (

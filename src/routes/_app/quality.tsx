@@ -93,26 +93,38 @@ function QualityPage() {
   const [s, setS] = useState({ contributor_id: "", project_id: "", score: "85", notes: "" });
   const [i, setI] = useState({ contributor_id: "", project_id: "", issue: "" });
   const [reportUserId, setReportUserId] = useState<string | null>(null);
+  const [activeUserIds, setActiveUserIds] = useState<Set<string>>(new Set());
 
   async function load() {
-    const [{ data: sc }, { data: is }, { data: pr }, { data: pj }] = await Promise.all([
-      supabase.from("quality_scores").select("*").order("review_date", { ascending: false }),
-      supabase.from("quality_issues").select("*").order("date", { ascending: false }),
-      supabase.from("profiles").select("id,name,email,photo_url"),
-      supabase
-        .from("projects")
-        .select("id,name,status,audience_type,version,tasking_live,current_owner_ids,emoji_icon")
-        .order("name"),
-    ]);
+    const [{ data: sc }, { data: is }, { data: pr }, { data: pj }, { data: ur }] =
+      await Promise.all([
+        supabase.from("quality_scores").select("*").order("review_date", { ascending: false }),
+        supabase.from("quality_issues").select("*").order("date", { ascending: false }),
+        supabase.from("profiles").select("id,name,email,photo_url"),
+        supabase
+          .from("projects")
+          .select("id,name,status,audience_type,version,tasking_live,current_owner_ids,emoji_icon")
+          .order("name"),
+        supabase.from("user_roles").select("user_id"),
+      ]);
     setScores((sc as any) ?? []);
     setIssues((is as any) ?? []);
     setProfiles((pr as any) ?? []);
     setProjects((pj as any) ?? []);
+    setActiveUserIds(new Set(((ur as { user_id: string }[]) ?? []).map((r) => r.user_id)));
   }
   useEffect(() => {
     load();
   }, []);
   useAutoRefresh(load);
+
+  // People who still have an account — a removed person's quality history
+  // stays in the data (for audit) but drops out of every "current team"
+  // picker/listing, same convention as Worklog's roster.
+  const activeProfiles = useMemo(
+    () => profiles.filter((p) => activeUserIds.has(p.id)),
+    [profiles, activeUserIds],
+  );
 
   const projectStats = useMemo(() => {
     return projects.map((p) => {
@@ -131,8 +143,13 @@ function QualityPage() {
   // Roster. Trend compares the two most recent scores.
   const personStats = useMemo(() => {
     const ids = new Set<string>();
-    scores.forEach((sc) => sc.contributor_id && ids.add(sc.contributor_id));
-    issues.forEach((x) => x.contributor_id && ids.add(x.contributor_id));
+    scores.forEach(
+      (sc) =>
+        sc.contributor_id && activeUserIds.has(sc.contributor_id) && ids.add(sc.contributor_id),
+    );
+    issues.forEach(
+      (x) => x.contributor_id && activeUserIds.has(x.contributor_id) && ids.add(x.contributor_id),
+    );
     const out: {
       id: string;
       avg: number | null;
@@ -158,7 +175,7 @@ function QualityPage() {
     }
     out.sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
     return out;
-  }, [scores, issues]);
+  }, [scores, issues, activeUserIds]);
 
   async function addScore() {
     if (!s.contributor_id) return;
@@ -558,7 +575,7 @@ function QualityPage() {
             onChange={(e) => setS({ ...s, contributor_id: e.target.value })}
           >
             <option value="">Select…</option>
-            {profiles.map((p) => (
+            {activeProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ?? p.email}
               </option>
@@ -615,7 +632,7 @@ function QualityPage() {
             onChange={(e) => setI({ ...i, contributor_id: e.target.value })}
           >
             <option value="">—</option>
-            {profiles.map((p) => (
+            {activeProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ?? p.email}
               </option>

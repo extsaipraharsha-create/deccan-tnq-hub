@@ -143,6 +143,18 @@
   }
 }
 
+/* Scrollbars are hidden everywhere - scrolling itself (wheel, trackpad,
+   touch, keyboard) is unaffected; only the visual track/thumb is removed. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge/IE */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, new Edge */
+  width: 0;
+  height: 0;
+}
+
 .font-mono {
   font-family: var(--font-mono);
 }

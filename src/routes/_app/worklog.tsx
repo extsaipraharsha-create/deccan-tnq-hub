@@ -64,6 +64,11 @@ type Profile = { id: string; name: string | null; email: string | null; photo_ur
 type Project = { id: string; name: string; emoji_icon: string | null };
 type Comment = { id: string; entry_id: string; author_id: string; body: string; created_at: string };
 type StatusHistoryRow = { entry_id: string; changed_by: string | null; changed_at: string };
+// A separate, narrower read of comments for the activity index only - the
+// full `comments` state above stays unwindowed (comment panels need every
+// comment regardless of age); this one is newest-first and scoped to the
+// last 30 days, which is all the activity index ever looks at.
+type ActivityComment = { author_id: string; created_at: string };
 type DelayLog = {
   id: string;
   entry_id: string;
@@ -269,6 +274,28 @@ function CommentPanel({
   );
 }
 
+// Supabase/PostgREST caps an unbounded query at a server-configured default
+// (commonly 1000 rows) - ordering doesn't change that, it just decides
+// *which* rows get silently dropped. This fetches in pages via .range()
+// until a short page confirms nothing's left, so a query is never silently
+// incomplete regardless of how large the table grows.
+async function fetchAllPages<T>(
+  makeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  pageSize = 1000,
+): Promise<T[]> {
+  const out: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return out;
+}
+
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
@@ -312,6 +339,7 @@ function WorkLogPage() {
   const [openReasonId, setOpenReasonId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryRow[]>([]);
+  const [activityComments, setActivityComments] = useState<ActivityComment[]>([]);
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskDraft[]>([blankTask()]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -422,30 +450,59 @@ function WorkLogPage() {
   }
 
   async function load() {
-    const [{ data: e }, { data: p }, { data: pr }, { data: dl }, { data: cm }, { data: ur }, { data: sh }] =
+    const activityWindowIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const [e, { data: p }, { data: pr }, { data: dl }, { data: cm }, { data: ur }, sh, ac] =
       await Promise.all([
-        supabase.from("work_log_entries").select("*").order("created_at", { ascending: false }),
+        // Paginated: the main feed's entry list must never silently lose
+        // rows just because the table grew past PostgREST's default cap.
+        fetchAllPages<Entry>((from, to) =>
+          (supabase as any)
+            .from("work_log_entries")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        ),
         supabase.from("profiles").select("id,name,email,photo_url"),
         supabase.from("projects").select("id,name,emoji_icon"),
         (supabase as any)
           .from("work_log_delay_log")
           .select("*")
           .order("created_at", { ascending: false }),
+        // Full, unwindowed, oldest-first - comment panels show a
+        // conversation thread for entries of any age, so this one can't be
+        // time-boxed the way the activity-only read below is.
         (supabase as any)
           .from("work_log_comments")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase.from("user_roles").select("user_id,role,status"),
-        (supabase as any)
-          .from("work_log_entry_status_history")
-          .select("entry_id,changed_by,changed_at"),
+        // Activity-only reads: newest-first and capped to the last 30 days
+        // (the heatmap only ever looks at the last 7), paginated for the
+        // same reason as entries above.
+        fetchAllPages<StatusHistoryRow>((from, to) =>
+          (supabase as any)
+            .from("work_log_entry_status_history")
+            .select("entry_id,changed_by,changed_at")
+            .gte("changed_at", activityWindowIso)
+            .order("changed_at", { ascending: false })
+            .range(from, to),
+        ),
+        fetchAllPages<ActivityComment>((from, to) =>
+          (supabase as any)
+            .from("work_log_comments")
+            .select("author_id,created_at")
+            .gte("created_at", activityWindowIso)
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        ),
       ]);
-    setEntries((e as any) ?? []);
+    setEntries(e);
     setProfiles((p as any) ?? []);
     setProjects((pr as any) ?? []);
     setDelayLogs((dl as DelayLog[]) ?? []);
     setComments((cm as Comment[]) ?? []);
-    setStatusHistory((sh as StatusHistoryRow[]) ?? []);
+    setStatusHistory(sh);
+    setActivityComments(ac);
     const roleRows = (ur as { user_id: string; role: string; status: string }[]) ?? [];
     // "Active" here means pickable/mentionable right now, not just "has a
     // role row" - a still-pending (not yet approved) or suspended account
@@ -979,13 +1036,19 @@ function WorkLogPage() {
   // work. dayKey() is local-timezone-safe either way, so the fix here is
   // the broader activity definition, not the day math.
   const activityIndex = useMemo(
-    () => buildActivityIndex({ entries, statusHistory, comments }),
-    [entries, statusHistory, comments],
+    () => buildActivityIndex({ entries, statusHistory, comments: activityComments }),
+    [entries, statusHistory, activityComments],
   );
   const lastActivityIndex = useMemo(
-    () => buildLastActivityIndex({ entries, statusHistory, comments }),
-    [entries, statusHistory, comments],
+    () => buildLastActivityIndex({ entries, statusHistory, comments: activityComments }),
+    [entries, statusHistory, activityComments],
   );
+  // Re-ticks "today"/"now" on a timer and on window focus/visibility (same
+  // pattern as useAutoRefresh), so a tab left open across midnight recomputes
+  // the roster's "active today" / heatmap / quietDays instead of showing
+  // yesterday's statuses indefinitely.
+  const [rosterNow, setRosterNow] = useState(() => Date.now());
+  useAutoRefresh(() => setRosterNow(Date.now()), 60000);
   const roster: RosterPerson[] = useMemo(() => {
     const byUser = new Map<string, Entry[]>();
     for (const e of entries) {
@@ -996,7 +1059,7 @@ function WorkLogPage() {
       arr.push(e);
       byUser.set(e.user_id, arr);
     }
-    const today = new Date();
+    const today = new Date(rosterNow);
     const todayKey = dayKey(today.toISOString());
     const out: RosterPerson[] = [];
     for (const [userId, userEntries] of byUser) {
@@ -1028,7 +1091,7 @@ function WorkLogPage() {
     }
     out.sort((a, b) => a.status.localeCompare(b.status));
     return out;
-  }, [entries, activeUserIds, roleByUser, activityIndex, lastActivityIndex]);
+  }, [entries, activeUserIds, roleByUser, activityIndex, lastActivityIndex, rosterNow]);
 
   const filteredRoster = useMemo(() => {
     const q = rosterSearch.trim().toLowerCase();

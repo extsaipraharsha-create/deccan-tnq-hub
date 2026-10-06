@@ -26,6 +26,21 @@ Deno.serve(async (req) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // dry_run: true only proves the secret authenticates - it returns before
+  // any query or send, so it never fires a real reminder or mutates
+  // reminder_sent_at/overdue_notified_at. pg_cron's body is always '{}', so
+  // a real run is unaffected; dry_run is only ever set by a manual check.
+  try {
+    const body = await req.json();
+    if (body?.dry_run === true) {
+      return new Response(JSON.stringify({ ok: true, dryRun: true }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+  } catch {
+    // No/invalid JSON body - fine, proceeds as a real run.
+  }
+
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const now = new Date();
   const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);

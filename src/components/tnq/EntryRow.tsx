@@ -104,6 +104,10 @@ export function EntryRow({
   reasonOpen,
   onToggleReason,
   reasonPanel,
+  selectable,
+  selected,
+  onToggleSelect,
+  focused,
 }: {
   entry: Entry;
   author?: Profile;
@@ -144,6 +148,14 @@ export function EntryRow({
   reasonOpen: boolean;
   onToggleReason: () => void;
   reasonPanel?: React.ReactNode;
+  /** Bulk-selection checkbox - only rendered when the viewer is allowed to
+   * act on this entry (their own, or any entry for an admin). */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  /** Keyboard-navigation focus ring (J/K move this between rows; D toggles
+   * complete on whichever one is focused). */
+  focused?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
@@ -243,8 +255,22 @@ export function EntryRow({
   }
 
   return (
-    <div className="row-actions-group px-4 py-3">
+    <div
+      className={`row-actions-group px-4 py-3 ${
+        focused ? "ring-2 ring-primary/50 ring-inset" : ""
+      }`}
+      data-entry-row={entry.id}
+    >
       <div className="flex items-start gap-3">
+        {selectable && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={onToggleSelect}
+            aria-label="Select entry"
+            className="mt-1.5 shrink-0 h-3.5 w-3.5 accent-primary"
+          />
+        )}
         {/* One-tap completion circle */}
         <button
           onClick={onToggleComplete}

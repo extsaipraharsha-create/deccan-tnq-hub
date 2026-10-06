@@ -144,7 +144,7 @@ export function DeadlineEscalationModal() {
             Mark complete
           </Button>
           <Button variant="secondary" onClick={() => setMode("reschedule")} disabled={saving}>
-            Extend deadline
+            Still going — reschedule
           </Button>
           <Button variant="ghost" onClick={remindLater} disabled={saving}>
             Remind me in 1 hour

@@ -21,9 +21,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Confetti } from "@/components/tnq/Confetti";
 import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
-import { Card, StatCard, EmptyState, StatusPill, Badge } from "@/components/tnq/ui";
+import { Card, StatCard, EmptyState, StatusPill, Badge, Button } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
 import { isTeamRole, type AppRole } from "@/lib/tnq/types";
+import {
+  computeWorklogMetrics,
+  countOpen,
+  countReschedulesInRange,
+  localWeekRange,
+  type MetricsEntry,
+  type MetricsDelayLog,
+} from "@/lib/tnq/worklog-metrics";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
@@ -49,6 +57,8 @@ function Dashboard() {
           {heroTitle}
         </h1>
       </div>
+
+      <WeeklyDigestCard />
 
       {/* Scannable stats stay full-width up top; everything else splits into
           a main column plus a side rail instead of one long vertical stack. */}
@@ -76,6 +86,93 @@ function Dashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------ WEEKLY DIGEST (Fri-Mon, worklog posters only) ------------ */
+// Computed with the exact same functions WorklogReport uses
+// (computeWorklogMetrics), just handed a week-long range instead of a
+// month - so "completed" here always agrees with what the report would
+// show for the same window. Shows Friday through Monday (viewer's local
+// time), dismissible per calendar week.
+function WeeklyDigestCard() {
+  const { user, role } = useAuth();
+  const [entries, setEntries] = useState<MetricsEntry[]>([]);
+  const [delays, setDelays] = useState<MetricsDelayLog[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  const day = new Date().getDay(); // 0 Sun .. 6 Sat
+  const isFriThroughMon = day === 5 || day === 6 || day === 0 || day === 1;
+  const canShow = (role === "super_admin" || isTeamRole(role)) && isFriThroughMon;
+  const weekRange = useMemo(() => localWeekRange(new Date()), []);
+  const weekStartKey = weekRange.from
+    ? `${weekRange.from.getFullYear()}-${String(weekRange.from.getMonth() + 1).padStart(2, "0")}-${String(weekRange.from.getDate()).padStart(2, "0")}`
+    : "";
+  const dismissKey = user ? `tnq_digest_dismissed_${user.id}` : null;
+
+  useEffect(() => {
+    if (!dismissKey) return;
+    try {
+      if (localStorage.getItem(dismissKey) === weekStartKey) setDismissed(true);
+    } catch {
+      // Not persisted - card just shows again next visit this week.
+    }
+  }, [dismissKey, weekStartKey]);
+
+  useEffect(() => {
+    if (!user || !canShow) return;
+    (async () => {
+      const [{ data: e }, { data: dl }] = await Promise.all([
+        supabase
+          .from("work_log_entries")
+          .select(
+            "id,project_id,entry_type,completed_at,completed_at_estimated,created_at,deadline,priority",
+          )
+          .eq("user_id", user.id),
+        (supabase as any)
+          .from("work_log_delay_log")
+          .select("id,entry_id,old_deadline,new_deadline,created_at")
+          .eq("user_id", user.id),
+      ]);
+      setEntries((e as MetricsEntry[]) ?? []);
+      setDelays((dl as MetricsDelayLog[]) ?? []);
+      setLoaded(true);
+    })();
+  }, [user?.id, canShow]);
+
+  function dismiss() {
+    setDismissed(true);
+    if (!dismissKey) return;
+    try {
+      localStorage.setItem(dismissKey, weekStartKey);
+    } catch {
+      // Not persisted this session - harmless, just reappears next visit.
+    }
+  }
+
+  if (!canShow || dismissed || !loaded) return null;
+
+  const metrics = computeWorklogMetrics(entries, delays, weekRange);
+  const slipped = countReschedulesInRange(delays, weekRange);
+  const open = countOpen(entries);
+
+  return (
+    <Card className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
+          Your week so far
+        </div>
+        <Button variant="ghost" size="sm" onClick={dismiss}>
+          Dismiss
+        </Button>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Completed" value={metrics.completedInPeriodCount} />
+        <StatCard label="Slipped" value={slipped} />
+        <StatCard label="Open into next week" value={open} />
+      </div>
+    </Card>
   );
 }
 

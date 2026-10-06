@@ -92,14 +92,10 @@ export function QuickAddBar({
   projects,
   people,
   onSubmit,
-  moreOptionsOpen,
-  onToggleMoreOptions,
 }: {
   projects: Project[];
   people: Profile[];
   onSubmit: (result: QuickAddResult) => void;
-  moreOptionsOpen: boolean;
-  onToggleMoreOptions: () => void;
 }) {
   const [text, setText] = useState("");
 
@@ -205,12 +201,6 @@ export function QuickAddBar({
           <Send className="h-4 w-4" />
         </button>
       </div>
-      <button
-        onClick={onToggleMoreOptions}
-        className="mt-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        {moreOptionsOpen ? "Hide more options" : "More options"}
-      </button>
     </div>
   );
 }

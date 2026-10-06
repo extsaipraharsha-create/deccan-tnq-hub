@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
@@ -20,11 +20,11 @@ import {
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { WorklogReport } from "@/components/tnq/WorklogReport";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
-import { EntryRow } from "@/components/tnq/EntryRow";
 import { QuickAddBar, type QuickAddResult } from "@/components/tnq/QuickAddBar";
 import { Card, Button, Textarea, Select, Input, Badge, EmptyState, Modal } from "@/components/tnq/ui";
 import {
   MessageSquare,
+  CalendarClock,
   Send,
   Pencil,
   Trash2,
@@ -56,6 +56,7 @@ type Entry = {
   completed_at: string | null;
   completed_at_estimated: boolean;
   deadline_updated_at: string | null;
+  snoozed_until: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -313,7 +314,26 @@ function WorkLogPage() {
   const [statusHistory, setStatusHistory] = useState<StatusHistoryRow[]>([]);
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskDraft[]>([blankTask()]);
-  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  // Latest `entries` without a stale closure - needed by callbacks (bulk
+  // undo) that read current entry state from inside a later toast click.
+  const entriesRef = useRef<Entry[]>(entries);
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
+
+  // Bulk selection: who's selected, which view-flat-order index has
+  // keyboard focus, and whether the shortcuts cheat sheet is open.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Carry-over prompt: entries the viewer still has open from before today.
+  // "Review them" filters the feed to exactly this snapshot of ids.
+  const [carryOverFilterIds, setCarryOverFilterIds] = useState<Set<string> | null>(null);
+  const [carryOverCardDismissed, setCarryOverCardDismissed] = useState(false);
 
   // Restore the last-used filter combo (per-user, via localStorage) on
   // first render, computed once so it doesn't refetch on every render.
@@ -673,11 +693,80 @@ function WorkLogPage() {
   // The one-tap completion circle toggles both ways (click again to undo),
   // unlike the other "Mark complete" buttons elsewhere which only show
   // while an entry is still open and so never need the reverse direction.
-  async function toggleComplete(entry: Entry) {
-    const { error } = await setEntryCompleted(entry, entry.entry_type !== "completed", {
-      actingUserId: user!.id,
+  const toggleComplete = useCallback(
+    async (entry: Entry) => {
+      const { error } = await setEntryCompleted(entry, entry.entry_type !== "completed", {
+        actingUserId: user!.id,
+      });
+      if (error) toast.error(error);
+    },
+    [user],
+  );
+  // Bulk selection only allows picking entries the viewer could act on
+  // individually anyway - their own, or (for an admin) anyone's - so a
+  // selection can never contain an entry bulk actions couldn't legally
+  // touch.
+  function canSelectEntry(e: Entry) {
+    return isAdmin || e.user_id === user?.id;
+  }
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-    if (error) toast.error(error);
+  }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+  async function bulkComplete() {
+    const ids = Array.from(selectedIds);
+    const targets = ids
+      .map((id) => entries.find((e) => e.id === id))
+      .filter((e): e is Entry => !!e && e.entry_type !== "completed");
+    if (targets.length === 0) return clearSelection();
+
+    const results = await Promise.allSettled(
+      targets.map((e) => setEntryCompleted(e, true, { actingUserId: user!.id })),
+    );
+    const succeededIds: string[] = [];
+    const failed: Entry[] = [];
+    results.forEach((r, i) => {
+      const entry = targets[i];
+      if (r.status === "fulfilled" && !r.value.error) succeededIds.push(entry.id);
+      else failed.push(entry);
+    });
+    clearSelection();
+
+    if (succeededIds.length > 0) {
+      toast.success(
+        `${succeededIds.length} marked complete${failed.length ? ` (${failed.length} failed)` : ""}`,
+        {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              for (const id of succeededIds) {
+                const current = entriesRef.current.find((e) => e.id === id);
+                if (!current) continue;
+                await setEntryCompleted(current, false, { actingUserId: user!.id });
+              }
+            },
+          },
+        },
+      );
+    }
+    if (failed.length > 0) {
+      const preview = failed
+        .slice(0, 3)
+        .map((e) => `"${e.content.slice(0, 30)}${e.content.length > 30 ? "…" : ""}"`)
+        .join(", ");
+      toast.error(
+        `${failed.length} entr${failed.length === 1 ? "y" : "ies"} failed to complete: ${preview}${
+          failed.length > 3 ? ", …" : ""
+        }`,
+      );
+    }
   }
   function logsFor(entryId: string) {
     return delayLogs.filter((l) => l.entry_id === entryId);
@@ -735,6 +824,7 @@ function WorkLogPage() {
         if (mk !== ek) return false;
       }
       if (overdueOnly && !(e.deadline && !e.completed_at && isOverdue(e.deadline))) return false;
+      if (carryOverFilterIds && !carryOverFilterIds.has(e.id)) return false;
       return true;
     });
   }, [
@@ -748,7 +838,51 @@ function WorkLogPage() {
     dateMode,
     dateValue,
     overdueOnly,
+    carryOverFilterIds,
   ]);
+
+  // Carry-over: the viewer's own open (not completed) entries created
+  // before today, excluding anything currently snoozed. Computed fresh each
+  // render from `entries`/`user`, independent of the "have we shown it
+  // today" dismissal below.
+  const carryOverEntries = useMemo(() => {
+    if (!user) return [];
+    const todayKey = dayKey(new Date().toISOString());
+    const nowMs = Date.now();
+    return entries.filter(
+      (e) =>
+        e.user_id === user.id &&
+        e.entry_type !== "completed" &&
+        dayKey(e.created_at) !== todayKey &&
+        !(e.snoozed_until && new Date(e.snoozed_until).getTime() > nowMs),
+    );
+  }, [entries, user]);
+
+  const CARRY_OVER_KEY = user ? `tnq_carryover_dismissed_${user.id}` : null;
+  useEffect(() => {
+    if (!CARRY_OVER_KEY) return;
+    try {
+      const todayKey = dayKey(new Date().toISOString());
+      if (localStorage.getItem(CARRY_OVER_KEY) === todayKey) setCarryOverCardDismissed(true);
+    } catch {
+      // Storage unavailable - card just shows every visit this session.
+    }
+  }, [CARRY_OVER_KEY]);
+  function dismissCarryOverForToday() {
+    setCarryOverCardDismissed(true);
+    if (!CARRY_OVER_KEY) return;
+    try {
+      localStorage.setItem(CARRY_OVER_KEY, dayKey(new Date().toISOString()));
+    } catch {
+      // Not persisted this session; card will just show again next visit.
+    }
+  }
+  function reviewCarryOver() {
+    setCarryOverFilterIds(new Set(carryOverEntries.map((e) => e.id)));
+    dismissCarryOverForToday();
+  }
+  const showCarryOverCard =
+    !carryOverCardDismissed && carryOverFilterIds === null && carryOverEntries.length > 0;
 
   // Step 2: group filtered entries into posting batches, then by (user_id + day).
   type Group = { key: string; user_id: string; day: string; entries: Batch[] };
@@ -803,27 +937,6 @@ function WorkLogPage() {
       list.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
     return map;
-  }, [filtered]);
-
-  // Feed view: a flat, chronological, day-grouped list (sticky date headers
-  // instead of a timestamp on every entry) - dayKey() is already local-time
-  // safe (uses getFullYear/getMonth/getDate, not the UTC variants), so an
-  // entry posted at 11:30pm groups under the viewer's actual local day.
-  const entriesByDay = useMemo(() => {
-    const map = new Map<string, Entry[]>();
-    for (const e of filtered) {
-      const k = dayKey(e.created_at);
-      const arr = map.get(k) ?? [];
-      arr.push(e);
-      map.set(k, arr);
-    }
-    const out: { day: string; entries: Entry[] }[] = [];
-    for (const [day, es] of map) {
-      es.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      out.push({ day, entries: es });
-    }
-    out.sort((a, b) => (a.day < b.day ? 1 : -1));
-    return out;
   }, [filtered]);
 
   // People who still have an account (weren't removed via Admin > Users).
@@ -924,6 +1037,61 @@ function WorkLogPage() {
     });
   }, [roster, rosterSearch, rosterProjectFilter, profiles]);
 
+  // Keyboard shortcuts - J/K (or arrows) move a focus ring through
+  // `filtered` (the same newest-first order Feed/Person render from); D
+  // toggles complete on whichever entry is focused; "/" jumps to search;
+  // "?" opens the cheat sheet. Disabled while typing anywhere, while any
+  // modifier is held, or while a dialog/menu is open, so shortcuts never
+  // fight with normal typing or an open ⋯ menu.
+  useEffect(() => {
+    function isTypingTarget(el: EventTarget | null) {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    }
+    function dialogOrMenuOpen() {
+      return !!document.querySelector('[role="dialog"], [role="menu"]');
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (dialogOrMenuOpen()) return;
+
+      if (e.key === "?") {
+        setShortcutsOpen(true);
+        return;
+      }
+      if (e.key === "/") {
+        // Only the feed/board/person views have the `search` box this jumps
+        // to - on Team Roster it'd be a no-op, so leave the browser's own
+        // "/" behavior (e.g. Firefox quick-find) alone there.
+        if (viewMode === "team") return;
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (filtered.length === 0) return;
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIndex((i) => (i === null ? 0 : Math.min(i + 1, filtered.length - 1)));
+        return;
+      }
+      if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIndex((i) => (i === null ? 0 : Math.max(i - 1, 0)));
+        return;
+      }
+      if (e.key === "d" || e.key === "D") {
+        if (focusedIndex === null) return;
+        const entry = filtered[focusedIndex];
+        if (entry) toggleComplete(entry);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [filtered, focusedIndex, viewMode, toggleComplete]);
+  const focusedEntryId = focusedIndex !== null ? filtered[focusedIndex]?.id : undefined;
+
   function exportCsv() {
     const header = [
       "#",
@@ -996,20 +1164,55 @@ function WorkLogPage() {
           </div>
         </Card>
       )}
-      {/* Quick-add bar — the primary way to post a single update. The full
-          multi-task form (with explicit project/type/priority/deadline
-          fields) stays available behind "More options" rather than being
-          removed. */}
-      {canPost && (
-        <QuickAddBar
-          projects={projects}
-          people={activeProfiles}
-          onSubmit={quickAddSubmit}
-          moreOptionsOpen={moreOptionsOpen}
-          onToggleMoreOptions={() => setMoreOptionsOpen((s) => !s)}
-        />
+      {showCarryOverCard && (
+        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-3">
+            <CalendarClock className="h-4 w-4 text-primary shrink-0" />
+            <div className="text-sm text-foreground">
+              You have {carryOverEntries.length} open item{carryOverEntries.length === 1 ? "" : "s"}{" "}
+              from before today.
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={dismissCarryOverForToday}>
+              Dismiss
+            </Button>
+            <Button size="sm" onClick={reviewCarryOver}>
+              Review them
+            </Button>
+          </div>
+        </Card>
       )}
-      {canPost && moreOptionsOpen && (
+      {carryOverFilterIds && (
+        <div className="mb-4 flex items-center gap-2 text-xs">
+          <Badge tone="info">
+            Showing {carryOverFilterIds.size} carry-over item{carryOverFilterIds.size === 1 ? "" : "s"}
+          </Badge>
+          <button
+            onClick={() => setCarryOverFilterIds(null)}
+            className="font-medium text-primary hover:underline"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+      {/* Quick-add is an optional, collapsed-by-default extra — the
+          original multi-task form below is the default, always-visible way
+          to post. */}
+      {canPost && (
+        <div className="mb-2">
+          <button
+            onClick={() => setQuickAddOpen((s) => !s)}
+            className="text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            {quickAddOpen ? "Hide quick add" : "+ Quick add"}
+          </button>
+        </div>
+      )}
+      {canPost && quickAddOpen && (
+        <QuickAddBar projects={projects} people={activeProfiles} onSubmit={quickAddSubmit} />
+      )}
+      {canPost && (
         <Card className="mb-6">
           <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase mb-2">
             What are you working on?
@@ -1136,9 +1339,10 @@ function WorkLogPage() {
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search content…"
+              placeholder="Search content… (/)"
               className="w-56 pl-8"
             />
           </div>
@@ -1236,30 +1440,54 @@ function WorkLogPage() {
       </div>
 
       {/* View mode */}
-      <div className="mb-4 flex items-center gap-1 bg-card border border-border rounded-full p-1 shadow-soft w-fit">
-        {(
-          [
-            { key: "feed" as const, label: "Feed", icon: List },
-            { key: "board" as const, label: "Board", icon: LayoutGrid },
-            { key: "person" as const, label: "Grouped by Person", icon: Users },
-            ...(canPost
-              ? [{ key: "team" as const, label: "Team", icon: FileBarChart }]
-              : []),
-          ] as const
-        ).map((v) => (
-          <button
-            key={v.key}
-            onClick={() => setViewMode(v.key)}
-            className={`inline-flex items-center gap-1.5 font-mono text-[11px] font-bold tracking-[0.18em] px-4 py-2 rounded-full transition-colors uppercase ${
-              viewMode === v.key
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <v.icon className="h-3.5 w-3.5" /> {v.label}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1 bg-card border border-border rounded-full p-1 shadow-soft w-fit">
+          {(
+            [
+              { key: "feed" as const, label: "Feed", icon: List },
+              { key: "board" as const, label: "Board", icon: LayoutGrid },
+              { key: "person" as const, label: "Grouped by Person", icon: Users },
+              ...(canPost
+                ? [{ key: "team" as const, label: "Team", icon: FileBarChart }]
+                : []),
+            ] as const
+          ).map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setViewMode(v.key)}
+              className={`inline-flex items-center gap-1.5 font-mono text-[11px] font-bold tracking-[0.18em] px-4 py-2 rounded-full transition-colors uppercase ${
+                viewMode === v.key
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <v.icon className="h-3.5 w-3.5" /> {v.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShortcutsOpen(true)}
+          className="font-mono text-[11px] font-medium tracking-wider text-muted-foreground hover:text-foreground"
+        >
+          Keyboard shortcuts (?)
+        </button>
       </div>
+
+      {selectedIds.size > 0 && viewMode === "person" && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/40 px-4 py-2.5">
+          <span className="text-sm font-medium text-foreground">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={clearSelection}>
+              Clear
+            </Button>
+            <Button size="sm" onClick={bulkComplete}>
+              <Check className="h-3.5 w-3.5" /> Mark complete
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       {viewMode === "team" ? (
@@ -1527,18 +1755,14 @@ function WorkLogPage() {
         </div>
       ) : viewMode === "person" ? (
         /* ========== GROUPED BY PERSON VIEW ========== */
+        /* Restored to the original batch layout (pre-Section-3) - no
+           EntryRow, no day headers, no clamping, no ⋯ menu. The two kept
+           Section-4 features (bulk-select, keyboard focus) are added as a
+           checkbox and a focus ring on the unchanged original row markup,
+           not a redesign of it. */
         <div className="space-y-4">
           {personGroups.map((pg) => {
             const author = profiles.find((p) => p.id === pg.user_id);
-            const allEntries = pg.batches.flatMap((b) => b.items);
-            const byDay = new Map<string, Entry[]>();
-            for (const e of allEntries) {
-              const k = dayKey(e.created_at);
-              const arr = byDay.get(k) ?? [];
-              arr.push(e);
-              byDay.set(k, arr);
-            }
-            const days = Array.from(byDay.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
             return (
               <Card key={pg.user_id} className="p-0! overflow-hidden">
                 {/* Person header */}
@@ -1555,153 +1779,510 @@ function WorkLogPage() {
                       {author?.name ?? author?.email ?? "—"}
                     </div>
                     <div className="font-mono text-[10px] text-muted-foreground">
-                      {allEntries.length} update{allEntries.length === 1 ? "" : "s"}
+                      {pg.batches.reduce((n, b) => n + b.items.length, 0)} update
+                      {pg.batches.reduce((n, b) => n + b.items.length, 0) === 1 ? "" : "s"}
                     </div>
                   </div>
                 </div>
-                {/* Entries, grouped by day (newest first) — the person
-                    header above already names who these are, so EntryRow
-                    doesn't repeat it. */}
-                {days.map(([day, dayEntries]) => (
-                  <div key={day}>
-                    <div className="px-5 pt-3 pb-1 font-mono text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase bg-muted/10">
-                      {fmtDateOnly(day + "T00:00:00")}
-                    </div>
-                    <div className="divide-y divide-border">
-                      {dayEntries.map((e) => {
+                {/* Batches (one card section per posting session) */}
+                <div className="divide-y divide-border">
+                  {pg.batches.map((batch) => (
+                    <div key={batch.key}>
+                      {batch.items.map((e, itemIdx) => {
                     const proj = projects.find((p) => p.id === e.project_id);
                     const isOwn = e.user_id === user?.id;
+                    const canModerate = isAdmin;
+                    const canComment = isAdmin || isTeamRole(role) || isOwn;
                     const entryComments = commentsFor(e.id);
                     const editing = editId === e.id;
                     return (
-                      <EntryRow
+                      <div
                         key={e.id}
-                        entry={e}
-                        project={proj}
-                        isOwn={isOwn}
-                        canModerate={isAdmin}
-                        canComment={isAdmin || isTeamRole(role) || isOwn}
-                        commentCount={entryComments.length}
-                        activeProfiles={activeProfiles}
-                        editing={editing}
-                        editContent={editContent}
-                        editType={editType}
-                        editPriority={editPriority}
-                        editDeadline={editDeadline}
-                        editReviewerId={editReviewerId}
-                        onChangeEditContent={setEditContent}
-                        onChangeEditType={setEditType}
-                        onChangeEditPriority={setEditPriority}
-                        onChangeEditDeadline={setEditDeadline}
-                        onChangeEditReviewerId={setEditReviewerId}
-                        onStartEdit={() => startEdit(e)}
-                        onSaveEdit={() => saveEdit(e.id)}
-                        onCancelEdit={() => setEditId(null)}
-                        onToggleComplete={() => toggleComplete(e)}
-                        onDelete={() => remove(e.id)}
-                        onNudge={!isOwn ? () => sendNudge(e.id, e.user_id) : undefined}
-                        onToggleComments={() => setOpenCommentId(openCommentId === e.id ? null : e.id)}
-                        commentsOpen={openCommentId === e.id}
-                        commentsPanel={
+                        className={`px-5 py-4 flex gap-3 ${e.priority === "P0" ? "border-l-4 border-l-red-500" : ""} ${itemIdx > 0 ? "border-t border-dashed border-border/60" : ""} ${e.id === focusedEntryId ? "ring-2 ring-primary/50 ring-inset" : ""}`}
+                      >
+                        {canSelectEntry(e) && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(e.id)}
+                            onChange={() => toggleSelect(e.id)}
+                            aria-label="Select entry"
+                            className="mt-1.5 shrink-0 h-3.5 w-3.5 accent-primary"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2">
+                            {editing ? (
+                              <>
+                                <Select
+                                  value={editType}
+                                  onChange={(ev) => setEditType(ev.target.value as EntryType)}
+                                  className="h-7! text-xs! w-auto!"
+                                >
+                                  {TYPES.map((t) => (
+                                    <option key={t.key} value={t.key}>
+                                      {t.label}
+                                    </option>
+                                  ))}
+                                </Select>
+                                <Select
+                                  value={editPriority}
+                                  onChange={(ev) => setEditPriority(ev.target.value as Priority)}
+                                  className="h-7! text-xs! w-auto!"
+                                >
+                                  {PRIORITY_LIST.map((p) => (
+                                    <option key={p.key} value={p.key}>
+                                      {p.label}
+                                    </option>
+                                  ))}
+                                </Select>
+                                <Input
+                                  type="datetime-local"
+                                  value={editDeadline}
+                                  onChange={(ev) => setEditDeadline(ev.target.value)}
+                                  title="Deadline"
+                                  className="h-7! text-xs! w-auto!"
+                                />
+                                {editType === "review_needed" && e.entry_type !== "review_needed" && (
+                                  <Select
+                                    value={editReviewerId}
+                                    onChange={(ev) => setEditReviewerId(ev.target.value)}
+                                    className="h-7! text-xs! w-auto!"
+                                  >
+                                    <option value="">— Reviewer (required) —</option>
+                                    {activeProfiles
+                                      .filter((pr) => pr.id !== user?.id)
+                                      .map((pr) => (
+                                        <option key={pr.id} value={pr.id}>
+                                          {pr.name ?? pr.email}
+                                        </option>
+                                      ))}
+                                  </Select>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <Badge tone={TYPE_TONE[e.entry_type]}>
+                                  {TYPE_LABEL[e.entry_type]}
+                                </Badge>
+                                <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
+                                  {e.priority || "P2"}
+                                </Badge>
+                                {e.deadline && !e.completed_at && (
+                                  <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                    Due {fmtDeadline(e.deadline)}
+                                  </Badge>
+                                )}
+                                {e.deadline_updated_at && (
+                                  <Badge tone="warn">Deadline changed</Badge>
+                                )}
+                                {logsFor(e.id).length > 0 && (
+                                  <button
+                                    onClick={() =>
+                                      setOpenReasonId(openReasonId === e.id ? null : e.id)
+                                    }
+                                    className="text-[11px] font-medium text-primary hover:underline"
+                                  >
+                                    {openReasonId === e.id ? "Hide reason" : "View reason"}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                              {fmtTime(e.created_at)}
+                            </span>
+                            {editing ? (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => saveEdit(e.id)}
+                                  className="p-1 text-emerald-600 hover:text-emerald-700"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditId(null)}
+                                  className="p-1 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1">
+                                {(isOwn || canModerate) && !e.completed_at && (
+                                  <button
+                                    onClick={() => markComplete(e)}
+                                    title="Mark complete"
+                                    className="p-1 text-muted-foreground hover:text-emerald-600"
+                                  >
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                {(canComment || entryComments.length > 0) && (
+                                  <button
+                                    onClick={() =>
+                                      setOpenCommentId(openCommentId === e.id ? null : e.id)
+                                    }
+                                    title="Comments"
+                                    className={`p-1 flex items-center gap-0.5 ${openCommentId === e.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                                  >
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                    {entryComments.length > 0 && (
+                                      <span className="font-mono text-[10px]">
+                                        {entryComments.length}
+                                      </span>
+                                    )}
+                                  </button>
+                                )}
+                                {isOwn && (
+                                  <button
+                                    onClick={() => startEdit(e)}
+                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                {(isOwn || canModerate) && (
+                                  <button
+                                    onClick={() => remove(e.id)}
+                                    className="p-1 text-muted-foreground hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {editing ? (
+                          <MentionTextarea
+                            value={editContent}
+                            onChange={setEditContent}
+                            people={activeProfiles}
+                            minHeight="min-h-15"
+                          />
+                        ) : (
+                          <div className="whitespace-pre-wrap break-words text-foreground text-sm">
+                            {e.content}
+                          </div>
+                        )}
+                        {proj && (
+                          <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
+                            {proj.emoji_icon ?? "📁"} {proj.name}
+                          </div>
+                        )}
+                        {openReasonId === e.id && <ReasonPanel logs={logsFor(e.id)} />}
+                        {openCommentId === e.id && (
                           <CommentPanel
                             comments={entryComments}
                             profiles={profiles}
                             currentUserId={user?.id}
                             isAdmin={isAdmin}
-                            canComment={isAdmin || isTeamRole(role) || isOwn}
+                            canComment={canComment}
                             onAdd={(body) => addComment(e.id, body)}
                             onDelete={deleteComment}
                           />
-                        }
-                        hasDelayLogs={logsFor(e.id).length > 0}
-                        reasonOpen={openReasonId === e.id}
-                        onToggleReason={() => setOpenReasonId(openReasonId === e.id ? null : e.id)}
-                        reasonPanel={<ReasonPanel logs={logsFor(e.id)} />}
-                      />
+                        )}
+                        </div>
+                      </div>
                     );
                       })}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </Card>
             );
           })}
         </div>
       ) : viewMode === "feed" ? (
-        /* ========== FEED VIEW ========== */
-        /* A flat, chronological list across everyone, grouped under sticky
-           per-day headers instead of a per-entry timestamp. Shows the
-           author on each row (unlike Person view, nothing above the row
-           names them here, since rows from different people are
-           interleaved). */
-        <div className="space-y-0">
-          {entriesByDay.map(({ day, entries: dayEntries }) => (
-            <div key={day}>
-              <div className="sticky top-0 z-1 -mx-px bg-background/95 backdrop-blur-sm px-1 py-2 font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
-                {fmtDateOnly(day + "T00:00:00")}
-              </div>
-              <Card className="p-0! overflow-hidden mb-3">
-                <div className="divide-y divide-border">
-                  {dayEntries.map((e) => {
-                    const author = profiles.find((p) => p.id === e.user_id);
-                    const proj = projects.find((p) => p.id === e.project_id);
-                    const isOwn = e.user_id === user?.id;
-                    const entryComments = commentsFor(e.id);
-                    const editing = editId === e.id;
-                    return (
-                      <EntryRow
-                        key={e.id}
-                        entry={e}
-                        author={author}
-                        showAuthor
-                        project={proj}
-                        isOwn={isOwn}
-                        canModerate={isAdmin}
-                        canComment={isAdmin || isTeamRole(role) || isOwn}
-                        commentCount={entryComments.length}
-                        activeProfiles={activeProfiles}
-                        editing={editing}
-                        editContent={editContent}
-                        editType={editType}
-                        editPriority={editPriority}
-                        editDeadline={editDeadline}
-                        editReviewerId={editReviewerId}
-                        onChangeEditContent={setEditContent}
-                        onChangeEditType={setEditType}
-                        onChangeEditPriority={setEditPriority}
-                        onChangeEditDeadline={setEditDeadline}
-                        onChangeEditReviewerId={setEditReviewerId}
-                        onStartEdit={() => startEdit(e)}
-                        onSaveEdit={() => saveEdit(e.id)}
-                        onCancelEdit={() => setEditId(null)}
-                        onToggleComplete={() => toggleComplete(e)}
-                        onDelete={() => remove(e.id)}
-                        onNudge={!isOwn ? () => sendNudge(e.id, e.user_id) : undefined}
-                        onToggleComments={() => setOpenCommentId(openCommentId === e.id ? null : e.id)}
-                        commentsOpen={openCommentId === e.id}
-                        commentsPanel={
-                          <CommentPanel
-                            comments={entryComments}
-                            profiles={profiles}
-                            currentUserId={user?.id}
-                            isAdmin={isAdmin}
-                            canComment={isAdmin || isTeamRole(role) || isOwn}
-                            onAdd={(body) => addComment(e.id, body)}
-                            onDelete={deleteComment}
-                          />
-                        }
-                        hasDelayLogs={logsFor(e.id).length > 0}
-                        reasonOpen={openReasonId === e.id}
-                        onToggleReason={() => setOpenReasonId(openReasonId === e.id ? null : e.id)}
-                        reasonPanel={<ReasonPanel logs={logsFor(e.id)} />}
-                      />
-                    );
-                  })}
-                </div>
-              </Card>
-            </div>
-          ))}
-        </div>
+        /* ========== CHRONOLOGICAL TABLE VIEW ========== */
+        /* Restored verbatim (layout + styling) from the pre-Section-3
+           commit, per explicit request - Section 3's card/day-grouped Feed
+           redesign is not used here. Completion still only ever goes
+           through markComplete()/saveEdit(), both of which route through
+           setEntryCompleted(); there's no separate "Done" badge - the
+           Category column's own badge already reads "Completed" via
+           TYPE_LABEL/TYPE_TONE when entry_type is "completed". */
+        <Card className="p-0! overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground">
+                  <th className="text-left px-4 py-3 w-12">#</th>
+                  <th className="text-left px-3 py-3">Name</th>
+                  <th className="text-left px-3 py-3 whitespace-nowrap">Date</th>
+                  <th className="text-left px-3 py-3 whitespace-nowrap">Priority</th>
+                  <th className="text-left px-3 py-3">Category</th>
+                  {Array.from({ length: maxCols }, (_, i) => (
+                    <th key={i} className="text-left px-3 py-3 min-w-65">
+                      Entry {i + 1}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {groups.map((g, i) => {
+                  const author = profiles.find((p) => p.id === g.user_id);
+                  return (
+                    <tr
+                      key={g.key}
+                      className={`hover:bg-accent/30 align-top ${g.entries[0]?.items[0]?.priority === "P0" ? "border-l-4 border-l-red-500" : ""}`}
+                    >
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          {author?.photo_url ? (
+                            <img src={author.photo_url} alt="" className="h-7 w-7 rounded-full" />
+                          ) : (
+                            <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold">
+                              {(author?.name ?? author?.email ?? "?")[0]?.toUpperCase()}
+                            </div>
+                          )}
+                          <span className="font-medium text-foreground whitespace-nowrap">
+                            {author?.name ?? author?.email ?? "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap font-mono">
+                        {fmtDateOnly(g.day + "T00:00:00")}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Badge tone={PRIORITY_TONE[g.entries[0]?.items[0]?.priority || "P2"]}>
+                          {g.entries[0]?.items[0]?.priority || "P2"}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-3">
+                        <Badge tone={TYPE_TONE[g.entries[0]?.items[0]?.entry_type || "working_on"]}>
+                          {TYPE_LABEL[g.entries[0]?.items[0]?.entry_type || "working_on"]}
+                        </Badge>
+                      </td>
+                      {Array.from({ length: maxCols }, (_, idx) => {
+                        const b = g.entries[idx];
+                        if (!b)
+                          return (
+                            <td key={idx} className="px-3 py-3 text-xs text-muted-foreground">
+                              —
+                            </td>
+                          );
+                        return (
+                          <td key={idx} className="px-3 py-3 min-w-65 max-w-90">
+                            <div className="space-y-2">
+                              {b.items.map((e, itemIdx) => {
+                                const proj = projects.find((p) => p.id === e.project_id);
+                                const isOwn = e.user_id === user?.id;
+                                const canModerate = isAdmin;
+                                const canComment = isAdmin || isTeamRole(role) || isOwn;
+                                const entryComments = commentsFor(e.id);
+                                const editing = editId === e.id;
+                                return (
+                                  <div
+                                    key={e.id}
+                                    className={
+                                      itemIdx > 0
+                                        ? "pt-2 border-t border-dashed border-border/60"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                      <div className="flex items-center gap-2">
+                                        {editing ? (
+                                          <>
+                                            <Select
+                                              value={editType}
+                                              onChange={(ev) =>
+                                                setEditType(ev.target.value as EntryType)
+                                              }
+                                              className="h-7! text-xs! w-auto!"
+                                            >
+                                              {TYPES.map((t) => (
+                                                <option key={t.key} value={t.key}>
+                                                  {t.label}
+                                                </option>
+                                              ))}
+                                            </Select>
+                                            <Select
+                                              value={editPriority}
+                                              onChange={(ev) =>
+                                                setEditPriority(ev.target.value as Priority)
+                                              }
+                                              className="h-7! text-xs! w-auto!"
+                                            >
+                                              {PRIORITY_LIST.map((p) => (
+                                                <option key={p.key} value={p.key}>
+                                                  {p.label}
+                                                </option>
+                                              ))}
+                                            </Select>
+                                            <Input
+                                              type="datetime-local"
+                                              value={editDeadline}
+                                              onChange={(ev) => setEditDeadline(ev.target.value)}
+                                              title="Deadline"
+                                              className="h-7! text-xs! w-auto!"
+                                            />
+                                            {editType === "review_needed" &&
+                                              e.entry_type !== "review_needed" && (
+                                                <Select
+                                                  value={editReviewerId}
+                                                  onChange={(ev) => setEditReviewerId(ev.target.value)}
+                                                  className="h-7! text-xs! w-auto!"
+                                                >
+                                                  <option value="">— Reviewer (required) —</option>
+                                                  {activeProfiles
+                                                    .filter((pr) => pr.id !== user?.id)
+                                                    .map((pr) => (
+                                                      <option key={pr.id} value={pr.id}>
+                                                        {pr.name ?? pr.email}
+                                                      </option>
+                                                    ))}
+                                                </Select>
+                                              )}
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Badge tone={TYPE_TONE[e.entry_type]}>
+                                              {TYPE_LABEL[e.entry_type]}
+                                            </Badge>
+                                            <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
+                                              {e.priority || "P2"}
+                                            </Badge>
+                                          </>
+                                        )}
+                                      </div>
+                                      <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                                        {fmtTime(e.created_at)}
+                                      </span>
+                                    </div>
+                                    {editing ? (
+                                      <MentionTextarea
+                                        value={editContent}
+                                        onChange={setEditContent}
+                                        people={activeProfiles}
+                                        minHeight="min-h-15"
+                                      />
+                                    ) : (
+                                      <div className="whitespace-pre-wrap break-words text-foreground text-sm">
+                                        {e.content}
+                                      </div>
+                                    )}
+                                    {e.deadline && !editing && (
+                                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                        {!e.completed_at && (
+                                          <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                            Due {fmtDeadline(e.deadline)}
+                                          </Badge>
+                                        )}
+                                        {e.deadline_updated_at && (
+                                          <Badge tone="warn">Deadline changed</Badge>
+                                        )}
+                                        {logsFor(e.id).length > 0 && (
+                                          <button
+                                            onClick={() =>
+                                              setOpenReasonId(openReasonId === e.id ? null : e.id)
+                                            }
+                                            className="text-[11px] font-medium text-primary hover:underline"
+                                          >
+                                            {openReasonId === e.id ? "Hide reason" : "View reason"}
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                    {openReasonId === e.id && <ReasonPanel logs={logsFor(e.id)} />}
+                                    {openCommentId === e.id && (
+                                      <CommentPanel
+                                        comments={entryComments}
+                                        profiles={profiles}
+                                        currentUserId={user?.id}
+                                        isAdmin={isAdmin}
+                                        canComment={canComment}
+                                        onAdd={(body) => addComment(e.id, body)}
+                                        onDelete={deleteComment}
+                                      />
+                                    )}
+                                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                                      {proj ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium">
+                                          {proj.emoji_icon ?? "📁"} {proj.name}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-muted-foreground">—</span>
+                                      )}
+                                      {editing ? (
+                                        <div className="flex gap-1">
+                                          <button
+                                            onClick={() => saveEdit(e.id)}
+                                            className="p-1 text-emerald-600 hover:text-emerald-700"
+                                          >
+                                            <Check className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => setEditId(null)}
+                                            className="p-1 text-muted-foreground hover:text-foreground"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex gap-1">
+                                          {(isOwn || canModerate) && !e.completed_at && (
+                                            <button
+                                              onClick={() => markComplete(e)}
+                                              title="Mark complete"
+                                              className="p-1 text-muted-foreground hover:text-emerald-600"
+                                            >
+                                              <CheckCircle2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                          {(canComment || entryComments.length > 0) && (
+                                            <button
+                                              onClick={() =>
+                                                setOpenCommentId(openCommentId === e.id ? null : e.id)
+                                              }
+                                              title="Comments"
+                                              className={`p-1 flex items-center gap-0.5 ${openCommentId === e.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                                            >
+                                              <MessageSquare className="h-3.5 w-3.5" />
+                                              {entryComments.length > 0 && (
+                                                <span className="font-mono text-[10px]">
+                                                  {entryComments.length}
+                                                </span>
+                                              )}
+                                            </button>
+                                          )}
+                                          {isOwn && (
+                                            <button
+                                              onClick={() => startEdit(e)}
+                                              className="p-1 text-muted-foreground hover:text-foreground"
+                                            >
+                                              <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                          {(isOwn || canModerate) && (
+                                            <button
+                                              onClick={() => remove(e.id)}
+                                              className="p-1 text-muted-foreground hover:text-destructive"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : null}
 
       {/* Board-card detail modal */}
@@ -1822,6 +2403,26 @@ function WorkLogPage() {
         }
       >
         {reportUserId && <WorklogReport userId={reportUserId} />}
+      </Modal>
+
+      {/* Keyboard shortcuts cheat sheet */}
+      <Modal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} title="Keyboard shortcuts">
+        <div className="space-y-2 text-sm">
+          {[
+            { keys: "J / K", desc: "Move focus to the next / previous entry" },
+            { keys: "↓ / ↑", desc: "Same as J / K" },
+            { keys: "D", desc: "Toggle complete on the focused entry" },
+            { keys: "/", desc: "Jump to search" },
+            { keys: "?", desc: "Show this cheat sheet" },
+          ].map((s) => (
+            <div key={s.keys} className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">{s.desc}</span>
+              <kbd className="font-mono text-xs font-semibold bg-muted px-2 py-1 rounded border border-border">
+                {s.keys}
+              </kbd>
+            </div>
+          ))}
+        </div>
       </Modal>
     </div>
   );

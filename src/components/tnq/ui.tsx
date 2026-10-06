@@ -1,5 +1,6 @@
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
+  forwardRef,
   useEffect,
   type ReactNode,
   type ButtonHTMLAttributes,
@@ -35,14 +36,17 @@ export function Button({
   );
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 ${props.className ?? ""}`}
-    />
-  );
-}
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  function Input(props, ref) {
+    return (
+      <input
+        ref={ref}
+        {...props}
+        className={`h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 ${props.className ?? ""}`}
+      />
+    );
+  },
+);
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
@@ -129,6 +133,8 @@ export function Modal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
+          role="dialog"
+          aria-modal="true"
         >
           <motion.div
             className={`w-full ${maxWidth} bg-card border border-border rounded-2xl shadow-pop overflow-hidden`}

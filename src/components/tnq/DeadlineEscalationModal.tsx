@@ -99,25 +99,36 @@ export function DeadlineEscalationModal() {
     if (!current || !newDeadline) return;
     setSaving(true);
     const iso = new Date(newDeadline).toISOString();
-    const { error: logError } = await (supabase as any).from("work_log_delay_log").insert({
-      entry_id: current.id,
-      user_id: user!.id,
-      old_deadline: current.deadline,
-      new_deadline: iso,
-      reason,
-      explanation: explanation.trim() || null,
-    } as any);
-    if (logError) {
-      setSaving(false);
-      return toast.error(logError.message);
+    // Compare normalized instants, not raw strings - picking the same
+    // minute as the current deadline (datetime-local has no seconds) isn't
+    // a real reschedule, so it shouldn't log a delay or badge the entry.
+    const actuallyChanged = new Date(iso).getTime() !== new Date(current.deadline).getTime();
+
+    if (actuallyChanged) {
+      const { error: logError } = await (supabase as any).from("work_log_delay_log").insert({
+        entry_id: current.id,
+        user_id: user!.id,
+        old_deadline: current.deadline,
+        new_deadline: iso,
+        reason,
+        explanation: explanation.trim() || null,
+      } as any);
+      if (logError) {
+        setSaving(false);
+        return toast.error(logError.message);
+      }
     }
     const { error } = await supabase
       .from("work_log_entries")
       .update({
         deadline: iso,
-        deadline_updated_at: new Date().toISOString(),
-        reminder_sent_at: null,
-        overdue_notified_at: null,
+        ...(actuallyChanged
+          ? {
+              deadline_updated_at: new Date().toISOString(),
+              reminder_sent_at: null,
+              overdue_notified_at: null,
+            }
+          : {}),
       } as any)
       .eq("id", current.id);
     setSaving(false);

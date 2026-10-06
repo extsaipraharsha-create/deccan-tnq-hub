@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen,
   FlaskConical,
-  FolderKanban,
   Award,
   Users,
   ClipboardCheck,
@@ -23,7 +22,7 @@ import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
 import { Card, StatCard, EmptyState, StatusPill, Badge, Button, Modal } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
-import { isTeamRole, type AppRole } from "@/lib/tnq/types";
+import { isTeamRole } from "@/lib/tnq/types";
 import {
   computeWorklogMetrics,
   countOpen,
@@ -39,6 +38,9 @@ function Dashboard() {
   const { role, profile } = useAuth();
   const dose = useMemo(() => pickDailyDose(profile?.id), [profile?.id]);
   const firstName = (profile?.name ?? profile?.email ?? "there").split(/[ @]/)[0];
+  // Assume expanded (today's two-column look) until the Wall reports
+  // otherwise, so there's no flash from full-width to narrow on first load.
+  const [wallExpanded, setWallExpanded] = useState(true);
 
   const heroTitle =
     role === "super_admin"
@@ -60,20 +62,30 @@ function Dashboard() {
 
       <WeeklyDigestCard />
 
-      {/* Scannable stats stay full-width up top; everything else splits into
-          a main column plus a side rail instead of one long vertical stack. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+      {/* Scannable stats stay full-width up top. Below that, when the Wall
+          has content it gets a side rail next to the main column; when it's
+          hidden (nothing recent), that rail collapses and everything -
+          including "My open items" - reflows to the full width instead of
+          leaving an empty, left-sided-looking column. */}
+      <div
+        className={`grid grid-cols-1 gap-6 items-start ${wallExpanded ? "lg:grid-cols-[1fr_340px]" : ""}`}
+      >
         <div className="space-y-8 min-w-0">
           <NeedsReviewWidget />
           {role === "contributor" && <ContributorDash dose={dose} />}
           {isTeamRole(role) && <SmeDash dose={dose} />}
           {role === "super_admin" && <AdminDash dose={dose} />}
-          <QualityByProject role={role} />
         </div>
-        <div className="space-y-4 lg:sticky lg:top-6">
+        <div
+          className={
+            wallExpanded
+              ? "space-y-4 lg:sticky lg:top-6"
+              : "flex flex-col sm:flex-row sm:items-center gap-4"
+          }
+        >
           <a
             href="/worklog?view=board&mine=1"
-            className="block bg-card border border-border rounded-2xl p-4 shadow-soft hover:shadow-lift transition-shadow"
+            className={`block bg-card border border-border rounded-2xl p-4 shadow-soft hover:shadow-lift transition-shadow ${wallExpanded ? "" : "sm:flex-1"}`}
           >
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <LayoutGrid className="h-4 w-4 text-primary" /> My open items
@@ -82,7 +94,7 @@ function Dashboard() {
               Jump into your Worklog board, filtered to just yours →
             </div>
           </a>
-          <WallOfExcellence />
+          <WallOfExcellence onExpandedChange={setWallExpanded} />
         </div>
       </div>
     </div>
@@ -184,7 +196,14 @@ type Recipient = { id: string; post_id: string; contributor_id: string };
 // only which posts are shown changes.
 const RECOGNITION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
-function WallOfExcellence() {
+function WallOfExcellence({
+  onExpandedChange,
+}: {
+  /** Reports whether the Wall is showing its full card (true) or has
+   * collapsed to a bare link (false), so the Dashboard can reflow its
+   * layout instead of leaving an empty side rail. */
+  onExpandedChange?: (expanded: boolean) => void;
+}) {
   const { role, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
@@ -258,6 +277,10 @@ function WallOfExcellence() {
     () => posts.filter((p) => now - new Date(p.created_at).getTime() < RECOGNITION_WINDOW_MS),
     [posts, now],
   );
+  useEffect(() => {
+    if (!loaded) return;
+    onExpandedChange?.(visiblePosts.length > 0);
+  }, [loaded, visiblePosts.length, onExpandedChange]);
 
   useEffect(() => {
     const ch = supabase
@@ -424,165 +447,6 @@ function WallOfExcellence() {
       </AnimatePresence>
 
       {historyModal}
-    </Card>
-  );
-}
-
-/* ------------ QUALITY BY PROJECT (all roles) ------------ */
-type QProj = {
-  id: string;
-  name: string;
-  status: string;
-  audience_type: string | null;
-  version: string | null;
-  tasking_live: boolean;
-  sme_owner_id: string | null;
-  emoji_icon: string | null;
-  current_owner_ids: string[] | null;
-};
-function QualityByProject({ role }: { role: AppRole | null }) {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [projects, setProjects] = useState<QProj[]>([]);
-  const [scoresByProj, setScoresByProj] = useState<Record<string, number[]>>({});
-  const [mineByProj, setMineByProj] = useState<Record<string, number[]>>({});
-  const [profiles, setProfiles] = useState<
-    { id: string; name: string | null; email: string | null }[]
-  >([]);
-
-  const load = async () => {
-    const { data: ps } = await supabase
-      .from("projects")
-      .select(
-        "id,name,status,audience_type,version,tasking_live,sme_owner_id,emoji_icon,current_owner_ids",
-      );
-    const { data: sc } = await supabase
-      .from("quality_scores")
-      .select("project_id,contributor_id,score");
-    const { data: profs } = await supabase.from("profiles").select("id,name,email");
-    const byProj: Record<string, number[]> = {};
-    const byMine: Record<string, number[]> = {};
-    (sc ?? []).forEach((s: any) => {
-      if (!s.project_id) return;
-      (byProj[s.project_id] ||= []).push(Number(s.score));
-      if (s.contributor_id === user?.id) (byMine[s.project_id] ||= []).push(Number(s.score));
-    });
-    setProjects((ps as any) ?? []);
-    setScoresByProj(byProj);
-    setMineByProj(byMine);
-    setProfiles((profs as any) ?? []);
-  };
-
-  useEffect(() => {
-    load();
-  }, [user?.id]);
-  useAutoRefresh(load);
-
-  const visible = useMemo(() => {
-    if (isTeamRole(role))
-      return projects.filter(
-        (p) => p.sme_owner_id === user?.id || (p.current_owner_ids ?? []).includes(user?.id ?? ""),
-      );
-    if (role === "contributor") return projects.filter((p) => (mineByProj[p.id]?.length ?? 0) > 0);
-    return projects;
-  }, [projects, role, user?.id, mineByProj]);
-
-  function rowTone(p: QProj, avg: number | null): string {
-    if (!p.tasking_live) return "bg-muted/40";
-    if (avg == null) return "";
-    if (avg >= 80) return "bg-emerald-50";
-    if (avg >= 60) return "bg-amber-50";
-    return "bg-rose-50";
-  }
-
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-3">
-        <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
-          Quality by project
-        </div>
-        <Link
-          to="/quality"
-          className="font-mono text-[11px] tracking-wider text-primary uppercase hover:underline"
-        >
-          Open tracker →
-        </Link>
-      </div>
-      {visible.length === 0 ? (
-        <EmptyState title="No projects to show" />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground border-b border-border">
-                <th className="text-left py-2">Project</th>
-                <th className="text-left py-2">Audience</th>
-                <th className="text-left py-2">Ver</th>
-                <th className="text-left py-2">Status</th>
-                <th className="text-left py-2">Tasking</th>
-                <th className="text-left py-2">Owner</th>
-                <th className="text-left py-2">
-                  {role === "contributor" ? "My Score" : "Avg Score"}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visible.map((p) => {
-                const arr = role === "contributor" ? mineByProj[p.id] : scoresByProj[p.id];
-                const avg = arr?.length
-                  ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10
-                  : null;
-                const owner = profiles.find((x) => x.id === p.sme_owner_id);
-                return (
-                  <tr
-                    key={p.id}
-                    onClick={() =>
-                      navigate({
-                        to: "/projects/$id",
-                        params: { id: p.id },
-                        search: { tab: "quality" } as any,
-                      })
-                    }
-                    className={`cursor-pointer hover:opacity-90 ${rowTone(p, avg)}`}
-                  >
-                    <td className="py-2.5 font-medium text-foreground">
-                      {p.emoji_icon ?? "📁"} {p.name}
-                    </td>
-                    <td className="py-2.5">
-                      <Badge tone="info">{p.audience_type ?? "N/A"}</Badge>
-                    </td>
-                    <td className="py-2.5 font-mono text-xs">{p.version ?? "—"}</td>
-                    <td className="py-2.5">
-                      <Badge
-                        tone={
-                          p.status === "active"
-                            ? "success"
-                            : p.status === "paused"
-                              ? "warn"
-                              : "default"
-                        }
-                      >
-                        {p.status}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5">
-                      <span
-                        className={`font-mono text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ${p.tasking_live ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}
-                      >
-                        {p.tasking_live ? "YES" : "NO"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-xs text-muted-foreground">{owner?.name ?? "—"}</td>
-                    <td className="py-2.5 font-mono font-bold">
-                      {avg != null ? avg.toFixed(1) : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </Card>
   );
 }
@@ -804,34 +668,22 @@ function AdminDash({ dose }: { dose: string }) {
     onboardingPct: 0,
     avgScore: 0,
   });
-  const [roles, setRoles] = useState<Record<string, number>>({});
-  const [projects, setProjects] = useState<
-    { name: string; sme: string; score: number | null; status: string }[]
-  >([]);
-
   const load = async () => {
-    const [activeProj, totalProj, members, issues, pending, allRoles, prog, scores, projs, profs] =
-      await Promise.all([
-        supabase
-          .from("projects")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "active"),
-        supabase.from("projects").select("id", { count: "exact", head: true }),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase
-          .from("quality_issues")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "open"),
-        supabase
-          .from("user_roles")
-          .select("id", { count: "exact", head: true })
-          .eq("role", "pending"),
-        supabase.from("user_roles").select("role,status"),
-        supabase.from("contributor_progress").select("status"),
-        supabase.from("quality_scores").select("score"),
-        supabase.from("projects").select("id,name,sme_owner_id,status").limit(8),
-        supabase.from("profiles").select("id,name,email"),
-      ]);
+    const [activeProj, totalProj, members, issues, pending, prog, scores] = await Promise.all([
+      supabase.from("projects").select("id", { count: "exact", head: true }).eq("status", "active"),
+      supabase.from("projects").select("id", { count: "exact", head: true }),
+      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      supabase
+        .from("quality_issues")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open"),
+      supabase
+        .from("user_roles")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "pending"),
+      supabase.from("contributor_progress").select("status"),
+      supabase.from("quality_scores").select("score"),
+    ]);
 
     const total = prog.data?.length ?? 0;
     const done = prog.data?.filter((p) => p.status === "complete").length ?? 0;
@@ -841,29 +693,6 @@ function AdminDash({ dose }: { dose: string }) {
           (scores.data.reduce((a, b) => a + Number(b.score), 0) / scores.data.length) * 10,
         ) / 10
       : 0;
-
-    const profMap = new Map((profs.data ?? []).map((p: any) => [p.id, p.name ?? p.email]));
-    setProjects(
-      (projs.data ?? []).map((p: any) => ({
-        name: p.name,
-        sme: profMap.get(p.sme_owner_id) ?? "Unassigned",
-        score: null,
-        status: p.status,
-      })),
-    );
-
-    const roleCounts: Record<string, number> = {
-      super_admin: 0,
-      tnq_team: 0,
-      viewer: 0,
-      contributor: 0,
-      pending: 0,
-    };
-    (allRoles.data ?? []).forEach((r: any) => {
-      const k = r.status === "pending" ? "pending" : r.role;
-      roleCounts[k] = (roleCounts[k] ?? 0) + 1;
-    });
-    setRoles(roleCounts);
 
     setStats({
       projects: activeProj.count ?? 0,
@@ -897,80 +726,6 @@ function AdminDash({ dose }: { dose: string }) {
         <StatCard label="Team members" value={stats.members} suffix="global" />
         <StatCard label="Open issues" value={stats.openIssues} />
         <StatCard label="Pending users" value={stats.pending} />
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card>
-          <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase mb-4">
-            Team by role
-          </div>
-          <div className="space-y-2">
-            {[
-              { key: "super_admin", label: "SUPER ADMIN", cls: "bg-foreground text-background" },
-              { key: "tnq_team", label: "TNQ TEAM", cls: "bg-orange-100 text-orange-800" },
-              { key: "deccan_team", label: "DECCAN TEAM", cls: "bg-emerald-100 text-emerald-800" },
-              { key: "viewer", label: "VIEWER", cls: "bg-sky-100 text-sky-800" },
-              { key: "contributor", label: "CONTRIBUTOR", cls: "bg-violet-100 text-violet-800" },
-              { key: "pending", label: "PENDING", cls: "bg-amber-100 text-amber-800" },
-            ].map((r) => (
-              <div
-                key={r.key}
-                className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2.5"
-              >
-                <span
-                  className={`font-mono text-[10px] font-bold tracking-[0.14em] px-2 py-1 rounded ${r.cls}`}
-                >
-                  {r.label}
-                </span>
-                <span className="font-digital text-xl text-foreground">{roles[r.key] ?? 0}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="xl:col-span-2">
-          <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase mb-4">
-            Project health matrix
-          </div>
-          {projects.length === 0 ? (
-            <EmptyState
-              title="No projects yet"
-              subtitle="Create a project to see health metrics."
-              icon={<FolderKanban className="h-8 w-8" />}
-            />
-          ) : (
-            <div>
-              <div className="grid grid-cols-[1fr_1fr_80px_80px] gap-2 font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase pb-2 border-b border-border">
-                <div>Project</div>
-                <div>SME</div>
-                <div>Score</div>
-                <div>Status</div>
-              </div>
-              <div className="divide-y divide-border">
-                {projects.map((p, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_1fr_80px_80px] gap-2 py-2.5 text-sm">
-                    <div className="font-medium text-foreground truncate">{p.name}</div>
-                    <div className="text-muted-foreground truncate">{p.sme}</div>
-                    <div className="font-mono text-foreground">{p.score ?? "—"}</div>
-                    <div>
-                      <span
-                        className={`font-mono text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded uppercase ${
-                          p.status === "active"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : p.status === "paused"
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {p.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

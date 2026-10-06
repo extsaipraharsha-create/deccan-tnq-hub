@@ -637,7 +637,15 @@ function WorkLogPage() {
     }
 
     const newDeadline = editDeadline ? new Date(editDeadline).toISOString() : null;
-    const deadlineChanged = newDeadline !== (original?.deadline ?? null);
+    // Compare normalized instants, not raw strings - editDeadline round-trips
+    // through a datetime-local input (minute precision, no seconds), so a
+    // same-minute deadline with non-zero seconds in the DB would otherwise
+    // always compare as "changed" even though the user never touched it,
+    // falsely marking (and badging) every edit to an entry that merely has
+    // a deadline, regardless of what was actually edited.
+    const deadlineChanged =
+      (newDeadline ? new Date(newDeadline).getTime() : null) !==
+      (original?.deadline ? new Date(original.deadline).getTime() : null);
     const { error } = await supabase
       .from("work_log_entries")
       .update({
@@ -1810,14 +1818,22 @@ function WorkLogPage() {
                           />
                         )}
                         <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-2">
+                        <div
+                          className={`flex gap-2 mb-1.5 ${editing ? "items-start" : "items-center justify-between"}`}
+                        >
+                          <div
+                            className={
+                              editing
+                                ? "flex flex-wrap items-center gap-1.5 min-w-0 max-w-full"
+                                : "flex items-center gap-2"
+                            }
+                          >
                             {editing ? (
                               <>
                                 <Select
                                   value={editType}
                                   onChange={(ev) => setEditType(ev.target.value as EntryType)}
-                                  className="h-7! text-xs! w-auto!"
+                                  className="h-7! text-xs! w-auto! max-w-full"
                                 >
                                   {TYPES.map((t) => (
                                     <option key={t.key} value={t.key}>
@@ -1828,7 +1844,7 @@ function WorkLogPage() {
                                 <Select
                                   value={editPriority}
                                   onChange={(ev) => setEditPriority(ev.target.value as Priority)}
-                                  className="h-7! text-xs! w-auto!"
+                                  className="h-7! text-xs! w-auto! max-w-full"
                                 >
                                   {PRIORITY_LIST.map((p) => (
                                     <option key={p.key} value={p.key}>
@@ -1841,13 +1857,13 @@ function WorkLogPage() {
                                   value={editDeadline}
                                   onChange={(ev) => setEditDeadline(ev.target.value)}
                                   title="Deadline"
-                                  className="h-7! text-xs! w-auto!"
+                                  className="h-7! text-xs! w-auto! max-w-full"
                                 />
                                 {editType === "review_needed" && e.entry_type !== "review_needed" && (
                                   <Select
                                     value={editReviewerId}
                                     onChange={(ev) => setEditReviewerId(ev.target.value)}
-                                    className="h-7! text-xs! w-auto!"
+                                    className="h-7! text-xs! w-auto! max-w-full"
                                   >
                                     <option value="">— Reviewer (required) —</option>
                                     {activeProfiles
@@ -2084,8 +2100,16 @@ function WorkLogPage() {
                                         : ""
                                     }
                                   >
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                      <div className="flex items-center gap-2">
+                                    <div
+                                      className={`flex gap-2 mb-1 ${editing ? "items-start" : "items-center justify-between"}`}
+                                    >
+                                      <div
+                                        className={
+                                          editing
+                                            ? "flex flex-wrap items-center gap-1.5 min-w-0 max-w-full"
+                                            : "flex items-center gap-2"
+                                        }
+                                      >
                                         {editing ? (
                                           <>
                                             <Select
@@ -2093,7 +2117,7 @@ function WorkLogPage() {
                                               onChange={(ev) =>
                                                 setEditType(ev.target.value as EntryType)
                                               }
-                                              className="h-7! text-xs! w-auto!"
+                                              className="h-7! text-xs! w-auto! max-w-full"
                                             >
                                               {TYPES.map((t) => (
                                                 <option key={t.key} value={t.key}>
@@ -2106,7 +2130,7 @@ function WorkLogPage() {
                                               onChange={(ev) =>
                                                 setEditPriority(ev.target.value as Priority)
                                               }
-                                              className="h-7! text-xs! w-auto!"
+                                              className="h-7! text-xs! w-auto! max-w-full"
                                             >
                                               {PRIORITY_LIST.map((p) => (
                                                 <option key={p.key} value={p.key}>
@@ -2119,14 +2143,14 @@ function WorkLogPage() {
                                               value={editDeadline}
                                               onChange={(ev) => setEditDeadline(ev.target.value)}
                                               title="Deadline"
-                                              className="h-7! text-xs! w-auto!"
+                                              className="h-7! text-xs! w-auto! max-w-full"
                                             />
                                             {editType === "review_needed" &&
                                               e.entry_type !== "review_needed" && (
                                                 <Select
                                                   value={editReviewerId}
                                                   onChange={(ev) => setEditReviewerId(ev.target.value)}
-                                                  className="h-7! text-xs! w-auto!"
+                                                  className="h-7! text-xs! w-auto! max-w-full"
                                                 >
                                                   <option value="">— Reviewer (required) —</option>
                                                   {activeProfiles

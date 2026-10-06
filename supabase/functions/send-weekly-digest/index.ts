@@ -40,6 +40,20 @@ Deno.serve(async (req) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // dry_run: true computes the exact same recipient list, counts, and push
+  // body text as a real run, but never calls webpush.sendNotification and
+  // never prunes expired subscriptions - a pure preview. pg_cron's body is
+  // always '{}', so a real run is unaffected; dry_run is only ever set by
+  // a manual invocation.
+  let dryRun = false;
+  try {
+    const body = await req.json();
+    dryRun = body?.dry_run === true;
+  } catch {
+    // No/invalid JSON body - fine, defaults to a real run (matches the
+    // cron job's plain '{}' call).
+  }
+
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const { weekStart, weekEnd } = weekBoundsIst(new Date());
 
@@ -54,19 +68,65 @@ Deno.serve(async (req) => {
     });
   }
 
+  const rows = (stats ?? []) as Stat[];
+  let profileById = new Map<string, { name: string | null; email: string | null }>();
+  if (dryRun && rows.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id,name,email")
+      .in(
+        "id",
+        rows.map((r) => r.user_id),
+      );
+    profileById = new Map(
+      (profiles ?? []).map((p: { id: string; name: string | null; email: string | null }) => [
+        p.id,
+        { name: p.name, email: p.email },
+      ]),
+    );
+  }
+
   let sent = 0;
-  for (const row of (stats ?? []) as Stat[]) {
+  const preview: {
+    user_id: string;
+    name: string | null;
+    completed_count: number;
+    slipped_count: number;
+    open_count: number;
+    body: string;
+    subscriptions: number;
+  }[] = [];
+
+  for (const row of rows) {
     const { data: subs } = await supabase
       .from("push_subscriptions")
       .select("id,endpoint,p256dh,auth")
       .eq("user_id", row.user_id);
+
+    // Lead with what got done; with nothing completed, "0 completed" reads
+    // as a knock even for someone who was genuinely active - so with
+    // nothing completed, the open count fronts the message instead.
+    const leadParts: string[] = [];
+    if (row.completed_count > 0) leadParts.push(`${row.completed_count} completed`);
+    if (row.slipped_count > 0) leadParts.push(`${row.slipped_count} slipped`);
+    const openClause = `${row.open_count} open going into next week`;
+    const body = leadParts.length > 0 ? [...leadParts, openClause].join(" · ") : openClause;
+
+    if (dryRun) {
+      const prof = profileById.get(row.user_id);
+      preview.push({
+        user_id: row.user_id,
+        name: prof?.name ?? prof?.email ?? null,
+        completed_count: row.completed_count,
+        slipped_count: row.slipped_count,
+        open_count: row.open_count,
+        body,
+        subscriptions: subs?.length ?? 0,
+      });
+      continue;
+    }
+
     if (!subs || subs.length === 0) continue;
-
-    const parts = [`${row.completed_count} completed`];
-    if (row.slipped_count > 0) parts.push(`${row.slipped_count} slipped`);
-    parts.push(`${row.open_count} open going into next week`);
-    const body = parts.join(" · ");
-
     for (const sub of subs as Sub[]) {
       try {
         await webpush.sendNotification(
@@ -83,7 +143,21 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ sent, usersWithActivity: (stats ?? []).length }), {
+  if (dryRun) {
+    return new Response(
+      JSON.stringify({
+        dryRun: true,
+        weekStart: weekStart.toISOString(),
+        weekEnd: weekEnd.toISOString(),
+        usersWithActivity: rows.length,
+        wouldSendTo: preview.filter((p) => p.subscriptions > 0).length,
+        recipients: preview,
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  }
+
+  return new Response(JSON.stringify({ sent, usersWithActivity: rows.length }), {
     headers: { "content-type": "application/json" },
   });
 });

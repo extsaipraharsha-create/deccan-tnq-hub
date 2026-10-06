@@ -21,7 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Confetti } from "@/components/tnq/Confetti";
 import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
-import { Card, StatCard, EmptyState, StatusPill, Badge, Button } from "@/components/tnq/ui";
+import { Card, StatCard, EmptyState, StatusPill, Badge, Button, Modal } from "@/components/tnq/ui";
 import { pickDailyDose, greeting, ROLE_LABEL } from "@/lib/tnq/constants";
 import { isTeamRole, type AppRole } from "@/lib/tnq/types";
 import {
@@ -179,6 +179,11 @@ function WeeklyDigestCard() {
 /* ------------ WALL OF EXCELLENCE (all roles) ------------ */
 type Post = { id: string; given_by: string; message: string; created_at: string };
 type Recipient = { id: string; post_id: string; contributor_id: string };
+// Posts older than this fall off the Wall - the design/interaction
+// (collapse, give-recognition link, reactions, confetti) is unchanged;
+// only which posts are shown changes.
+const RECOGNITION_WINDOW_MS = 48 * 60 * 60 * 1000;
+
 function WallOfExcellence() {
   const { role, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -189,14 +194,20 @@ function WallOfExcellence() {
   >([]);
   const [celebrate, setCelebrate] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [loaded, setLoaded] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPosts, setHistoryPosts] = useState<Post[] | null>(null);
   const canGive = role === "super_admin" || isTeamRole(role);
   const seenIds = useRef<Set<string> | null>(null);
 
   const load = async () => {
+    const windowStartIso = new Date(Date.now() - RECOGNITION_WINDOW_MS).toISOString();
     const [{ data: p }, { data: r }, { data: rx }, { data: pf }] = await Promise.all([
       (supabase as any)
         .from("recognition_posts")
         .select("*")
+        .gte("created_at", windowStartIso)
         .order("created_at", { ascending: false })
         .limit(5),
       (supabase as any).from("recognition_recipients").select("*"),
@@ -216,11 +227,37 @@ function WallOfExcellence() {
     setRecipients((r as Recipient[]) ?? []);
     setReactions((rx as Reaction[]) ?? []);
     setProfiles((pf as any) ?? []);
+    setLoaded(true);
   };
   useEffect(() => {
     load();
   }, []);
   useAutoRefresh(load);
+
+  // "See past recognitions" - fetched on demand (not part of the regular
+  // poll) since it's the one place that needs the full, unwindowed history.
+  async function openHistory() {
+    setHistoryOpen(true);
+    if (historyPosts !== null) return;
+    const { data } = await (supabase as any)
+      .from("recognition_posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setHistoryPosts((data as Post[]) ?? []);
+  }
+
+  // Auto-hide: the server-side window above already re-excludes aged-out
+  // posts on every poll/refetch, but a post can cross the 48h line between
+  // polls - this client-side tick re-filters the already-fetched list every
+  // 30s so it still disappears without waiting on the next network refresh.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+  const visiblePosts = useMemo(
+    () => posts.filter((p) => now - new Date(p.created_at).getTime() < RECOGNITION_WINDOW_MS),
+    [posts, now],
+  );
 
   useEffect(() => {
     const ch = supabase
@@ -247,6 +284,65 @@ function WallOfExcellence() {
     recipients.filter((r) => r.post_id === postId).map((r) => r.contributor_id);
   const reactionsFor = (postId: string) => reactions.filter((r) => r.post_id === postId);
 
+  const historyModal = (
+    <Modal
+      open={historyOpen}
+      onClose={() => setHistoryOpen(false)}
+      title="Past recognitions"
+      size="lg"
+    >
+      {historyPosts === null ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : historyPosts.length === 0 ? (
+        <EmptyState title="No recognitions yet" icon={<Trophy className="h-8 w-8" />} />
+      ) : (
+        <div className="space-y-3">
+          {historyPosts.map((p) => (
+            <div key={p.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
+              <div className="text-sm font-medium text-foreground">
+                {recipientsFor(p.id).map(who).join(", ") || "—"}
+              </div>
+              <div className="text-sm text-foreground/90 whitespace-pre-wrap">{p.message}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                by {who(p.given_by)} ·{" "}
+                {new Date(p.created_at).toLocaleDateString(undefined, {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </div>
+              <ReactionBar
+                postId={p.id}
+                reactions={reactionsFor(p.id)}
+                userId={user?.id}
+                onChange={load}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+
+  // Closes entirely once loaded and nothing's in the 48h window - not just
+  // an empty message - and reappears on its own the moment a new one lands
+  // (visiblePosts is reactive to the poll/realtime subscription above). A
+  // bare link (no card/header) stays behind so older recognitions are
+  // still reachable while the Wall itself is closed.
+  if (loaded && visiblePosts.length === 0) {
+    return (
+      <>
+        <button
+          onClick={openHistory}
+          className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        >
+          See past recognitions
+        </button>
+        {historyModal}
+      </>
+    );
+  }
+
   return (
     <Card>
       <Confetti fire={celebrate} />
@@ -259,7 +355,7 @@ function WallOfExcellence() {
           <div className="font-mono text-xs font-bold tracking-[0.18em] text-foreground uppercase">
             Wall of excellence
           </div>
-          {posts.length > 0 && <Badge tone="default">{posts.length}</Badge>}
+          {visiblePosts.length > 0 && <Badge tone="default">{visiblePosts.length}</Badge>}
         </div>
         <ChevronDown
           className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`}
@@ -274,29 +370,35 @@ function WallOfExcellence() {
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
           >
-            {canGive && (
-              <div className="mb-3">
+            <div className="mb-3 flex items-center justify-between">
+              {canGive ? (
                 <Link
                   to="/admin/recognitions"
                   className="font-mono text-[11px] tracking-wider text-primary uppercase hover:underline"
                 >
                   Give recognition →
                 </Link>
-              </div>
-            )}
-            {posts.length === 0 ? (
+              ) : (
+                <span />
+              )}
+              <button
+                onClick={openHistory}
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                See past recognitions
+              </button>
+            </div>
+            {visiblePosts.length === 0 ? (
               <EmptyState
-                title="No recognitions yet"
+                title="No recognitions in the last 48 hours"
                 subtitle={
-                  canGive
-                    ? "Give the first one above."
-                    : "Celebrate teammates from the admin console."
+                  canGive ? "Give one above." : "Celebrate teammates from the admin console."
                 }
                 icon={<Trophy className="h-8 w-8" />}
               />
             ) : (
               <div className="space-y-3">
-                {posts.map((p) => (
+                {visiblePosts.map((p) => (
                   <div key={p.id} className="rounded-lg bg-muted/40 px-3 py-2.5">
                     <div className="text-sm font-medium text-foreground">
                       {recipientsFor(p.id).map(who).join(", ") || "—"}
@@ -320,6 +422,8 @@ function WallOfExcellence() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {historyModal}
     </Card>
   );
 }

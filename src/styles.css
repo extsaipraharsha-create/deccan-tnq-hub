@@ -173,3 +173,22 @@
     linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+/* Worklog entry row's "more actions" trigger: on a real mouse (hover-capable,
+   fine pointer) it stays dim until the row is hovered or keyboard-focused,
+   so the row stays uncluttered; on touch (no true hover) it's always
+   visible, since there's no hover state to reveal it. Put .row-actions on
+   the trigger button and .row-actions-group on its row/container. */
+.row-actions {
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .row-actions {
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .row-actions-group:hover .row-actions,
+  .row-actions-group:focus-within .row-actions {
+    opacity: 1;
+  }
+}

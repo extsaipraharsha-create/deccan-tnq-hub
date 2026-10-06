@@ -66,8 +66,13 @@ const PRIORITY_LABEL: Record<Priority, string> = {
   P3: "P3",
 };
 
+// Local-time month key, not a slice of the UTC ISO string - an entry
+// created at 11:30pm local time near a month boundary would otherwise get
+// bucketed into the wrong month depending on the viewer's UTC offset. Same
+// local-time convention as worklog.tsx's dayKey().
 function monthKeyOf(iso: string) {
-  return iso.slice(0, 7);
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 function currentMonthKey() {
   return monthKeyOf(new Date().toISOString());

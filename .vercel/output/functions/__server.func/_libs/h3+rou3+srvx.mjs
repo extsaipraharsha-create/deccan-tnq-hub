@@ -34,6 +34,7 @@ function lazyInherit(target, source, sourceKey) {
 	}
 }
 var _needsNormRE = /(?:(?:^|\/)(?:\.|\.\.|%2e|%2e\.|\.%2e|%2e%2e)(?:\/|$))|[\\^#"<>{}`\x80-\uffff]/i;
+var _searchNeedsNormRE = /[#"'<>]/;
 var FastURL = /* @__PURE__ */ (() => {
 	const NativeURL = globalThis.URL;
 	const FastURL = class URL {
@@ -48,9 +49,9 @@ var FastURL = /* @__PURE__ */ (() => {
 		constructor(url) {
 			if (typeof url === "string") {
 				const isOriginForm = url[0] === "/";
-				if (isOriginForm && !url.includes("#")) this.#href = url;
+				if (isOriginForm && !_searchNeedsNormRE.test(url)) this.#href = url;
 				else this.#url = new NativeURL(isOriginForm ? `http://localhost${url}` : url);
-			} else if (_needsNormRE.test(url.pathname) || url.search?.includes("#")) this.#url = new NativeURL(`${url.protocol || "http:"}//${url.host || "localhost"}${url.pathname}${url.search || ""}`);
+			} else if (_needsNormRE.test(url.pathname) || url.search && _searchNeedsNormRE.test(url.search)) this.#url = new NativeURL(`${url.protocol || "http:"}//${url.host || "localhost"}${url.pathname}${url.search || ""}`);
 			else {
 				this.#protocol = url.protocol;
 				this.#host = url.host;
@@ -220,17 +221,18 @@ var NodeResponse = /* @__PURE__ */ (() => {
 			else body = this._response.body;
 			const headers = [];
 			const initHeaders = this.#init?.headers;
-			const headerEntries = this.#response?.headers || this.#headers || (initHeaders ? Array.isArray(initHeaders) ? initHeaders : initHeaders?.entries ? initHeaders.entries() : Object.entries(initHeaders).map(([k, v]) => [k.toLowerCase(), v]) : void 0);
+			const headerEntries = this.#response?.headers || this.#headers || (initHeaders ? Array.isArray(initHeaders) ? initHeaders : initHeaders?.entries ? initHeaders.entries() : Object.entries(initHeaders) : void 0);
 			let hasContentTypeHeader;
 			let hasContentLength;
 			if (headerEntries) for (const [key, value] of headerEntries) {
-				if (Array.isArray(value)) for (const v of value) headers.push([key, v]);
-				else headers.push([key, value]);
-				if (key === "content-type") hasContentTypeHeader = true;
-				else if (key === "content-length") hasContentLength = true;
+				const lowerKey = typeof key === "string" ? key.toLowerCase() : String(key);
+				if (Array.isArray(value)) for (const v of value) headers.push(lowerKey, v);
+				else headers.push(lowerKey, value);
+				if (lowerKey === "content-type") hasContentTypeHeader = true;
+				else if (lowerKey === "content-length") hasContentLength = true;
 			}
-			if (contentType && !hasContentTypeHeader) headers.push(["content-type", contentType]);
-			if (contentLength && !hasContentLength) headers.push(["content-length", String(contentLength)]);
+			if (contentType && !hasContentTypeHeader) headers.push("content-type", contentType);
+			if (contentLength && !hasContentLength) headers.push("content-length", String(contentLength));
 			this.#init = void 0;
 			this.#headers = void 0;
 			this.#response = void 0;

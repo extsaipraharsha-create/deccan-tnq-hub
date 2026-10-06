@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
@@ -10,6 +9,7 @@ import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { enablePushReminders, isPushSupported } from "@/lib/tnq/push";
 import { undoableAction } from "@/lib/tnq/confirm-toast";
 import { isTeamRole } from "@/lib/tnq/types";
+import { setEntryCompleted, type EntryType } from "@/lib/tnq/worklog-completion";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { WorklogReport } from "@/components/tnq/WorklogReport";
 import { NeedsReviewWidget } from "@/components/tnq/NeedsReviewWidget";
@@ -34,13 +34,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type EntryType =
-  | "working_on"
-  | "need_help"
-  | "completed"
-  | "blocked"
-  | "review_needed"
-  | "available_to_help";
 type Priority = "P0" | "P1" | "P2" | "P3";
 type Entry = {
   id: string;
@@ -48,9 +41,11 @@ type Entry = {
   content: string;
   project_id: string | null;
   entry_type: EntryType;
+  previous_entry_type: EntryType | null;
   priority: Priority;
   deadline: string | null;
   completed_at: string | null;
+  completed_at_estimated: boolean;
   deadline_updated_at: string | null;
   created_at: string;
 };
@@ -522,6 +517,12 @@ function WorkLogPage() {
           entry_type: t.entryType,
           priority: t.priority,
           deadline: new Date(t.deadline).toISOString(),
+          // Posting a brand-new entry already marked Completed is a create,
+          // not an update, so it can't go through setEntryCompleted (there's
+          // no existing row yet) - set completed_at directly here instead,
+          // same single-source-of-truth invariant (category says Completed
+          // <=> completed_at is set), just at creation time.
+          ...(t.entryType === "completed" ? { completed_at: new Date().toISOString() } : {}),
         })) as any,
       )
       .select();
@@ -562,13 +563,29 @@ function WorkLogPage() {
       toast.error("Pick a reviewer before saving");
       return;
     }
+    // Completion always goes through the shared function, never a raw
+    // entry_type write - moving the category dropdown to/from "Completed"
+    // is just another entry point into the same mark-complete/undo logic
+    // every other surface uses.
+    const movingIntoCompleted = editType === "completed" && original?.entry_type !== "completed";
+    const movingOutOfCompleted = editType !== "completed" && original?.entry_type === "completed";
+    if (original && (movingIntoCompleted || movingOutOfCompleted)) {
+      const { error: completionError } = await setEntryCompleted(original, movingIntoCompleted, {
+        actingUserId: user!.id,
+        restoreType: movingOutOfCompleted ? editType : undefined,
+      });
+      if (completionError) return toast.error(completionError);
+    }
+
     const newDeadline = editDeadline ? new Date(editDeadline).toISOString() : null;
     const deadlineChanged = newDeadline !== (original?.deadline ?? null);
     const { error } = await supabase
       .from("work_log_entries")
       .update({
         content: editContent,
-        entry_type: editType,
+        // entry_type is handled above when the completed transition fires;
+        // otherwise (e.g. working_on -> blocked) it's a plain field change.
+        ...(movingIntoCompleted || movingOutOfCompleted ? {} : { entry_type: editType }),
         priority: editPriority,
         deadline: newDeadline,
         ...(deadlineChanged
@@ -609,12 +626,9 @@ function WorkLogPage() {
       },
     );
   }
-  async function markComplete(id: string) {
-    const { error } = await supabase
-      .from("work_log_entries")
-      .update({ completed_at: new Date().toISOString() } as any)
-      .eq("id", id);
-    if (error) return toast.error(error.message);
+  async function markComplete(entry: Entry) {
+    const { error } = await setEntryCompleted(entry, true, { actingUserId: user!.id });
+    if (error) return toast.error(error);
     toast.success("Marked complete");
   }
   function logsFor(entryId: string) {
@@ -1395,14 +1409,11 @@ function WorkLogPage() {
                               {proj.emoji_icon ?? "📁"} {proj.name}
                             </span>
                           )}
-                          {e.deadline &&
-                            (e.completed_at ? (
-                              <Badge tone="success">Done</Badge>
-                            ) : (
-                              <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
-                                Due {fmtDeadline(e.deadline)}
-                              </Badge>
-                            ))}
+                          {e.deadline && !e.completed_at && (
+                            <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                              Due {fmtDeadline(e.deadline)}
+                            </Badge>
+                          )}
                         </div>
                       </motion.button>
                     );
@@ -1518,14 +1529,11 @@ function WorkLogPage() {
                                 <Badge tone={PRIORITY_TONE[e.priority || "P2"]}>
                                   {e.priority || "P2"}
                                 </Badge>
-                                {e.deadline &&
-                                  (e.completed_at ? (
-                                    <Badge tone="success">Done</Badge>
-                                  ) : (
-                                    <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
-                                      Due {fmtDeadline(e.deadline)}
-                                    </Badge>
-                                  ))}
+                                {e.deadline && !e.completed_at && (
+                                  <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
+                                    Due {fmtDeadline(e.deadline)}
+                                  </Badge>
+                                )}
                                 {e.deadline_updated_at && (
                                   <Badge tone="warn">Deadline changed</Badge>
                                 )}
@@ -1565,7 +1573,7 @@ function WorkLogPage() {
                               <div className="flex gap-1">
                                 {(isOwn || canModerate) && !e.completed_at && (
                                   <button
-                                    onClick={() => markComplete(e.id)}
+                                    onClick={() => markComplete(e)}
                                     title="Mark complete"
                                     className="p-1 text-muted-foreground hover:text-emerald-600"
                                   >
@@ -1813,9 +1821,7 @@ function WorkLogPage() {
                                     )}
                                     {e.deadline && !editing && (
                                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                        {e.completed_at ? (
-                                          <Badge tone="success">Done</Badge>
-                                        ) : (
+                                        {!e.completed_at && (
                                           <Badge tone={isOverdue(e.deadline) ? "danger" : "default"}>
                                             Due {fmtDeadline(e.deadline)}
                                           </Badge>
@@ -1874,7 +1880,7 @@ function WorkLogPage() {
                                         <div className="flex gap-1">
                                           {(isOwn || canModerate) && !e.completed_at && (
                                             <button
-                                              onClick={() => markComplete(e.id)}
+                                              onClick={() => markComplete(e)}
                                               title="Mark complete"
                                               className="p-1 text-muted-foreground hover:text-emerald-600"
                                             >
@@ -1945,7 +1951,7 @@ function WorkLogPage() {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    markComplete(detailEntry.id);
+                    markComplete(detailEntry);
                     setDetailEntry(null);
                   }}
                 >
@@ -1996,14 +2002,11 @@ function WorkLogPage() {
               <Badge tone={PRIORITY_TONE[detailEntry.priority || "P2"]}>
                 {detailEntry.priority || "P2"}
               </Badge>
-              {detailEntry.deadline &&
-                (detailEntry.completed_at ? (
-                  <Badge tone="success">Done</Badge>
-                ) : (
-                  <Badge tone={isOverdue(detailEntry.deadline) ? "danger" : "default"}>
-                    Due {fmtDeadline(detailEntry.deadline)}
-                  </Badge>
-                ))}
+              {detailEntry.deadline && !detailEntry.completed_at && (
+                <Badge tone={isOverdue(detailEntry.deadline) ? "danger" : "default"}>
+                  Due {fmtDeadline(detailEntry.deadline)}
+                </Badge>
+              )}
               {detailEntry.deadline_updated_at && <Badge tone="warn">Deadline changed</Badge>}
             </div>
             <div className="whitespace-pre-wrap break-words text-sm text-foreground">

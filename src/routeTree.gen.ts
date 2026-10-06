@@ -9,51 +9,45 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SuspendedRouteImport } from './routes/suspended'
-import { Route as PendingRouteImport } from './routes/pending'
-import { Route as MaintenanceRouteImport } from './routes/maintenance'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppWorklogRouteImport } from './routes/_app/worklog'
-import { Route as AppTeamRouteImport } from './routes/_app/team'
-import { Route as AppResourcesRouteImport } from './routes/_app/resources'
-import { Route as AppQualityRouteImport } from './routes/_app/quality'
-import { Route as AppProjectsRouteImport } from './routes/_app/projects'
-import { Route as AppOnboardingRouteImport } from './routes/_app/onboarding'
-import { Route as AppNewcomersRouteImport } from './routes/_app/newcomers'
-import { Route as AppMyScoresRouteImport } from './routes/_app/my-scores'
-import { Route as AppMyReportRouteImport } from './routes/_app/my-report'
-import { Route as AppMyProjectsRouteImport } from './routes/_app/my-projects'
-import { Route as AppMyProgressRouteImport } from './routes/_app/my-progress'
-import { Route as AppMyPlaygroundRouteImport } from './routes/_app/my-playground'
-import { Route as AppMyLearningRouteImport } from './routes/_app/my-learning'
-import { Route as AppLearningRouteImport } from './routes/_app/learning'
-import { Route as AppGuideRouteImport } from './routes/_app/guide'
-import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MaintenanceRouteImport } from './routes/maintenance'
+import { Route as PendingRouteImport } from './routes/pending'
+import { Route as SuspendedRouteImport } from './routes/suspended'
 import { Route as AppContributorsRouteImport } from './routes/_app/contributors'
-import { Route as AppProjectsIdRouteImport } from './routes/_app/projects.$id'
-import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
-import { Route as AppAdminSourcesRouteImport } from './routes/_app/admin/sources'
-import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
-import { Route as AppAdminRecognitionsRouteImport } from './routes/_app/admin/recognitions'
-import { Route as AppAdminGrantsRouteImport } from './routes/_app/admin/grants'
-import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppGuideRouteImport } from './routes/_app/guide'
+import { Route as AppLearningRouteImport } from './routes/_app/learning'
+import { Route as AppMyLearningRouteImport } from './routes/_app/my-learning'
+import { Route as AppMyPlaygroundRouteImport } from './routes/_app/my-playground'
+import { Route as AppMyProgressRouteImport } from './routes/_app/my-progress'
+import { Route as AppMyProjectsRouteImport } from './routes/_app/my-projects'
+import { Route as AppMyReportRouteImport } from './routes/_app/my-report'
+import { Route as AppMyScoresRouteImport } from './routes/_app/my-scores'
+import { Route as AppNewcomersRouteImport } from './routes/_app/newcomers'
+import { Route as AppOnboardingRouteImport } from './routes/_app/onboarding'
+import { Route as AppProjectsRouteImport } from './routes/_app/projects'
+import { Route as AppQualityRouteImport } from './routes/_app/quality'
+import { Route as AppResourcesRouteImport } from './routes/_app/resources'
+import { Route as AppTeamRouteImport } from './routes/_app/team'
+import { Route as AppWorklogRouteImport } from './routes/_app/worklog'
 import { Route as AppAdminAnnouncementsRouteImport } from './routes/_app/admin/announcements'
+import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
+import { Route as AppAdminGrantsRouteImport } from './routes/_app/admin/grants'
+import { Route as AppAdminRecognitionsRouteImport } from './routes/_app/admin/recognitions'
+import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
+import { Route as AppAdminSourcesRouteImport } from './routes/_app/admin/sources'
+import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
+import { Route as AppProjectsIdRouteImport } from './routes/_app/projects.$id'
 
-const SuspendedRoute = SuspendedRouteImport.update({
-  id: '/suspended',
-  path: '/suspended',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PendingRoute = PendingRouteImport.update({
-  id: '/pending',
-  path: '/pending',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MaintenanceRoute = MaintenanceRouteImport.update({
-  id: '/maintenance',
-  path: '/maintenance',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -61,88 +55,24 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
+const MaintenanceRoute = MaintenanceRouteImport.update({
+  id: '/maintenance',
+  path: '/maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const PendingRoute = PendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppWorklogRoute = AppWorklogRouteImport.update({
-  id: '/worklog',
-  path: '/worklog',
-  getParentRoute: () => AppRoute,
+const SuspendedRoute = SuspendedRouteImport.update({
+  id: '/suspended',
+  path: '/suspended',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppTeamRoute = AppTeamRouteImport.update({
-  id: '/team',
-  path: '/team',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppResourcesRoute = AppResourcesRouteImport.update({
-  id: '/resources',
-  path: '/resources',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppQualityRoute = AppQualityRouteImport.update({
-  id: '/quality',
-  path: '/quality',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppProjectsRoute = AppProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppOnboardingRoute = AppOnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppNewcomersRoute = AppNewcomersRouteImport.update({
-  id: '/newcomers',
-  path: '/newcomers',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyScoresRoute = AppMyScoresRouteImport.update({
-  id: '/my-scores',
-  path: '/my-scores',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyReportRoute = AppMyReportRouteImport.update({
-  id: '/my-report',
-  path: '/my-report',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyProjectsRoute = AppMyProjectsRouteImport.update({
-  id: '/my-projects',
-  path: '/my-projects',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyProgressRoute = AppMyProgressRouteImport.update({
-  id: '/my-progress',
-  path: '/my-progress',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyPlaygroundRoute = AppMyPlaygroundRouteImport.update({
-  id: '/my-playground',
-  path: '/my-playground',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyLearningRoute = AppMyLearningRouteImport.update({
-  id: '/my-learning',
-  path: '/my-learning',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppLearningRoute = AppLearningRouteImport.update({
-  id: '/learning',
-  path: '/learning',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppGuideRoute = AppGuideRouteImport.update({
-  id: '/guide',
-  path: '/guide',
+const AppContributorsRoute = AppContributorsRouteImport.update({
+  id: '/contributors',
+  path: '/contributors',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -150,39 +80,84 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
-const AppContributorsRoute = AppContributorsRouteImport.update({
-  id: '/contributors',
-  path: '/contributors',
+const AppGuideRoute = AppGuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
   getParentRoute: () => AppRoute,
 } as any)
-const AppProjectsIdRoute = AppProjectsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppProjectsRoute,
-} as any)
-const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
-  id: '/admin/users',
-  path: '/admin/users',
+const AppLearningRoute = AppLearningRouteImport.update({
+  id: '/learning',
+  path: '/learning',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminSourcesRoute = AppAdminSourcesRouteImport.update({
-  id: '/admin/sources',
-  path: '/admin/sources',
+const AppMyLearningRoute = AppMyLearningRouteImport.update({
+  id: '/my-learning',
+  path: '/my-learning',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
-  id: '/admin/settings',
-  path: '/admin/settings',
+const AppMyPlaygroundRoute = AppMyPlaygroundRouteImport.update({
+  id: '/my-playground',
+  path: '/my-playground',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminRecognitionsRoute = AppAdminRecognitionsRouteImport.update({
-  id: '/admin/recognitions',
-  path: '/admin/recognitions',
+const AppMyProgressRoute = AppMyProgressRouteImport.update({
+  id: '/my-progress',
+  path: '/my-progress',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminGrantsRoute = AppAdminGrantsRouteImport.update({
-  id: '/admin/grants',
-  path: '/admin/grants',
+const AppMyProjectsRoute = AppMyProjectsRouteImport.update({
+  id: '/my-projects',
+  path: '/my-projects',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyReportRoute = AppMyReportRouteImport.update({
+  id: '/my-report',
+  path: '/my-report',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyScoresRoute = AppMyScoresRouteImport.update({
+  id: '/my-scores',
+  path: '/my-scores',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNewcomersRoute = AppNewcomersRouteImport.update({
+  id: '/newcomers',
+  path: '/newcomers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQualityRoute = AppQualityRouteImport.update({
+  id: '/quality',
+  path: '/quality',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppResourcesRoute = AppResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTeamRoute = AppTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorklogRoute = AppWorklogRouteImport.update({
+  id: '/worklog',
+  path: '/worklog',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminAnnouncementsRoute = AppAdminAnnouncementsRouteImport.update({
+  id: '/admin/announcements',
+  path: '/admin/announcements',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminAuditRoute = AppAdminAuditRouteImport.update({
@@ -190,10 +165,35 @@ const AppAdminAuditRoute = AppAdminAuditRouteImport.update({
   path: '/admin/audit',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminAnnouncementsRoute = AppAdminAnnouncementsRouteImport.update({
-  id: '/admin/announcements',
-  path: '/admin/announcements',
+const AppAdminGrantsRoute = AppAdminGrantsRouteImport.update({
+  id: '/admin/grants',
+  path: '/admin/grants',
   getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRecognitionsRoute = AppAdminRecognitionsRouteImport.update({
+  id: '/admin/recognitions',
+  path: '/admin/recognitions',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminSourcesRoute = AppAdminSourcesRouteImport.update({
+  id: '/admin/sources',
+  path: '/admin/sources',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsIdRoute = AppProjectsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppProjectsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -405,32 +405,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/suspended': {
-      id: '/suspended'
-      path: '/suspended'
-      fullPath: '/suspended'
-      preLoaderRoute: typeof SuspendedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pending': {
-      id: '/pending'
-      path: '/pending'
-      fullPath: '/pending'
-      preLoaderRoute: typeof PendingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/maintenance': {
-      id: '/maintenance'
-      path: '/maintenance'
-      fullPath: '/maintenance'
-      preLoaderRoute: typeof MaintenanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -440,116 +419,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/worklog': {
-      id: '/_app/worklog'
-      path: '/worklog'
-      fullPath: '/worklog'
-      preLoaderRoute: typeof AppWorklogRouteImport
-      parentRoute: typeof AppRoute
+    '/maintenance': {
+      id: '/maintenance'
+      path: '/maintenance'
+      fullPath: '/maintenance'
+      preLoaderRoute: typeof MaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/team': {
-      id: '/_app/team'
-      path: '/team'
-      fullPath: '/team'
-      preLoaderRoute: typeof AppTeamRouteImport
-      parentRoute: typeof AppRoute
+    '/pending': {
+      id: '/pending'
+      path: '/pending'
+      fullPath: '/pending'
+      preLoaderRoute: typeof PendingRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/resources': {
-      id: '/_app/resources'
-      path: '/resources'
-      fullPath: '/resources'
-      preLoaderRoute: typeof AppResourcesRouteImport
-      parentRoute: typeof AppRoute
+    '/suspended': {
+      id: '/suspended'
+      path: '/suspended'
+      fullPath: '/suspended'
+      preLoaderRoute: typeof SuspendedRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/quality': {
-      id: '/_app/quality'
-      path: '/quality'
-      fullPath: '/quality'
-      preLoaderRoute: typeof AppQualityRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/projects': {
-      id: '/_app/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof AppProjectsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/onboarding': {
-      id: '/_app/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof AppOnboardingRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/newcomers': {
-      id: '/_app/newcomers'
-      path: '/newcomers'
-      fullPath: '/newcomers'
-      preLoaderRoute: typeof AppNewcomersRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my-scores': {
-      id: '/_app/my-scores'
-      path: '/my-scores'
-      fullPath: '/my-scores'
-      preLoaderRoute: typeof AppMyScoresRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my-report': {
-      id: '/_app/my-report'
-      path: '/my-report'
-      fullPath: '/my-report'
-      preLoaderRoute: typeof AppMyReportRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my-projects': {
-      id: '/_app/my-projects'
-      path: '/my-projects'
-      fullPath: '/my-projects'
-      preLoaderRoute: typeof AppMyProjectsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my-progress': {
-      id: '/_app/my-progress'
-      path: '/my-progress'
-      fullPath: '/my-progress'
-      preLoaderRoute: typeof AppMyProgressRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my-playground': {
-      id: '/_app/my-playground'
-      path: '/my-playground'
-      fullPath: '/my-playground'
-      preLoaderRoute: typeof AppMyPlaygroundRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my-learning': {
-      id: '/_app/my-learning'
-      path: '/my-learning'
-      fullPath: '/my-learning'
-      preLoaderRoute: typeof AppMyLearningRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/learning': {
-      id: '/_app/learning'
-      path: '/learning'
-      fullPath: '/learning'
-      preLoaderRoute: typeof AppLearningRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/guide': {
-      id: '/_app/guide'
-      path: '/guide'
-      fullPath: '/guide'
-      preLoaderRoute: typeof AppGuideRouteImport
+    '/_app/contributors': {
+      id: '/_app/contributors'
+      path: '/contributors'
+      fullPath: '/contributors'
+      preLoaderRoute: typeof AppContributorsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -559,53 +461,116 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/contributors': {
-      id: '/_app/contributors'
-      path: '/contributors'
-      fullPath: '/contributors'
-      preLoaderRoute: typeof AppContributorsRouteImport
+    '/_app/guide': {
+      id: '/_app/guide'
+      path: '/guide'
+      fullPath: '/guide'
+      preLoaderRoute: typeof AppGuideRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/projects/$id': {
-      id: '/_app/projects/$id'
-      path: '/$id'
-      fullPath: '/projects/$id'
-      preLoaderRoute: typeof AppProjectsIdRouteImport
-      parentRoute: typeof AppProjectsRoute
-    }
-    '/_app/admin/users': {
-      id: '/_app/admin/users'
-      path: '/admin/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AppAdminUsersRouteImport
+    '/_app/learning': {
+      id: '/_app/learning'
+      path: '/learning'
+      fullPath: '/learning'
+      preLoaderRoute: typeof AppLearningRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/sources': {
-      id: '/_app/admin/sources'
-      path: '/admin/sources'
-      fullPath: '/admin/sources'
-      preLoaderRoute: typeof AppAdminSourcesRouteImport
+    '/_app/my-learning': {
+      id: '/_app/my-learning'
+      path: '/my-learning'
+      fullPath: '/my-learning'
+      preLoaderRoute: typeof AppMyLearningRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/settings': {
-      id: '/_app/admin/settings'
-      path: '/admin/settings'
-      fullPath: '/admin/settings'
-      preLoaderRoute: typeof AppAdminSettingsRouteImport
+    '/_app/my-playground': {
+      id: '/_app/my-playground'
+      path: '/my-playground'
+      fullPath: '/my-playground'
+      preLoaderRoute: typeof AppMyPlaygroundRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/recognitions': {
-      id: '/_app/admin/recognitions'
-      path: '/admin/recognitions'
-      fullPath: '/admin/recognitions'
-      preLoaderRoute: typeof AppAdminRecognitionsRouteImport
+    '/_app/my-progress': {
+      id: '/_app/my-progress'
+      path: '/my-progress'
+      fullPath: '/my-progress'
+      preLoaderRoute: typeof AppMyProgressRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/grants': {
-      id: '/_app/admin/grants'
-      path: '/admin/grants'
-      fullPath: '/admin/grants'
-      preLoaderRoute: typeof AppAdminGrantsRouteImport
+    '/_app/my-projects': {
+      id: '/_app/my-projects'
+      path: '/my-projects'
+      fullPath: '/my-projects'
+      preLoaderRoute: typeof AppMyProjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-report': {
+      id: '/_app/my-report'
+      path: '/my-report'
+      fullPath: '/my-report'
+      preLoaderRoute: typeof AppMyReportRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-scores': {
+      id: '/_app/my-scores'
+      path: '/my-scores'
+      fullPath: '/my-scores'
+      preLoaderRoute: typeof AppMyScoresRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/newcomers': {
+      id: '/_app/newcomers'
+      path: '/newcomers'
+      fullPath: '/newcomers'
+      preLoaderRoute: typeof AppNewcomersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/onboarding': {
+      id: '/_app/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects': {
+      id: '/_app/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/quality': {
+      id: '/_app/quality'
+      path: '/quality'
+      fullPath: '/quality'
+      preLoaderRoute: typeof AppQualityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/resources': {
+      id: '/_app/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof AppResourcesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/team': {
+      id: '/_app/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof AppTeamRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/worklog': {
+      id: '/_app/worklog'
+      path: '/worklog'
+      fullPath: '/worklog'
+      preLoaderRoute: typeof AppWorklogRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/announcements': {
+      id: '/_app/admin/announcements'
+      path: '/admin/announcements'
+      fullPath: '/admin/announcements'
+      preLoaderRoute: typeof AppAdminAnnouncementsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin/audit': {
@@ -615,12 +580,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminAuditRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/announcements': {
-      id: '/_app/admin/announcements'
-      path: '/admin/announcements'
-      fullPath: '/admin/announcements'
-      preLoaderRoute: typeof AppAdminAnnouncementsRouteImport
+    '/_app/admin/grants': {
+      id: '/_app/admin/grants'
+      path: '/admin/grants'
+      fullPath: '/admin/grants'
+      preLoaderRoute: typeof AppAdminGrantsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/admin/recognitions': {
+      id: '/_app/admin/recognitions'
+      path: '/admin/recognitions'
+      fullPath: '/admin/recognitions'
+      preLoaderRoute: typeof AppAdminRecognitionsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/settings': {
+      id: '/_app/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AppAdminSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/sources': {
+      id: '/_app/admin/sources'
+      path: '/admin/sources'
+      fullPath: '/admin/sources'
+      preLoaderRoute: typeof AppAdminSourcesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/users': {
+      id: '/_app/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$id': {
+      id: '/_app/projects/$id'
+      path: '/$id'
+      fullPath: '/projects/$id'
+      preLoaderRoute: typeof AppProjectsIdRouteImport
+      parentRoute: typeof AppProjectsRoute
     }
   }
 }

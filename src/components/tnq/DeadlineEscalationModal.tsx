@@ -5,17 +5,27 @@ import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
 import { Modal, Button, Select, Input, Textarea } from "@/components/tnq/ui";
 import { isTeamRole } from "@/lib/tnq/types";
+import { setEntryCompleted, type EntryType } from "@/lib/tnq/worklog-completion";
 import { toast } from "sonner";
 
-type OverdueEntry = { id: string; content: string; deadline: string };
+type OverdueEntry = {
+  id: string;
+  content: string;
+  deadline: string;
+  entry_type: EntryType;
+  previous_entry_type: EntryType | null;
+};
 
 const REASONS = ["Blocked", "Underestimated", "Waiting on someone", "Other"];
+const SNOOZE_MS = 60 * 60 * 1000;
 
-// One-shot-per-session nudge: if a poster has a task whose deadline passed
-// with no completed_at, ask them to close it out or push the deadline with a
-// reason. Dismissing (X / backdrop) just hides it for this session — it
-// reappears next time the app loads if still unresolved, rather than
-// re-popping immediately, so it stays out of the way once seen.
+// Surfaces two kinds of heads-up for a poster's own deadlines, sharing one
+// modal: entries due within the next hour (not yet overdue) and entries
+// already overdue, both excluding anything already completed. Dismissing
+// (X / backdrop) hides it for this session only - it reappears next load if
+// still unresolved. "Remind me in 1 hour" is different: it writes
+// snoozed_until on the entry itself, so the snooze survives reloads and
+// applies the same way on any device, not just this tab's session state.
 export function DeadlineEscalationModal() {
   const { user, role } = useAuth();
   const canHaveDeadlines = role === "super_admin" || isTeamRole(role);
@@ -29,12 +39,16 @@ export function DeadlineEscalationModal() {
 
   async function load() {
     if (!user || !canHaveDeadlines) return;
+    const nowIso = new Date().toISOString();
+    const inOneHour = new Date(Date.now() + SNOOZE_MS).toISOString();
     const { data } = await (supabase as any)
       .from("work_log_entries")
-      .select("id,content,deadline")
+      .select("id,content,deadline,entry_type,previous_entry_type")
       .eq("user_id", user.id)
       .is("completed_at", null)
-      .lt("deadline", new Date().toISOString())
+      .not("deadline", "is", null)
+      .lte("deadline", inOneHour)
+      .or(`snoozed_until.is.null,snoozed_until.lt.${nowIso}`)
       .order("deadline", { ascending: true });
     setQueue((data as OverdueEntry[]) ?? []);
   }
@@ -43,7 +57,10 @@ export function DeadlineEscalationModal() {
   }, [user?.id]);
   useAutoRefresh(load, 60000);
 
+  const now = Date.now();
   const current = queue.find((e) => !dismissed.has(e.id)) ?? null;
+  const urgency: "overdue" | "upcoming" =
+    current && new Date(current.deadline).getTime() < now ? "overdue" : "upcoming";
 
   useEffect(() => {
     setMode("choice");
@@ -57,15 +74,23 @@ export function DeadlineEscalationModal() {
     setDismissed((prev) => new Set(prev).add(current.id));
   }
 
-  async function markComplete() {
+  async function remindLater() {
     if (!current) return;
-    setSaving(true);
+    const snoozedUntil = new Date(Date.now() + SNOOZE_MS).toISOString();
     const { error } = await supabase
       .from("work_log_entries")
-      .update({ completed_at: new Date().toISOString() } as any)
+      .update({ snoozed_until: snoozedUntil } as any)
       .eq("id", current.id);
-    setSaving(false);
     if (error) return toast.error(error.message);
+    setQueue((prev) => prev.filter((e) => e.id !== current.id));
+  }
+
+  async function markComplete() {
+    if (!current || !user) return;
+    setSaving(true);
+    const { error } = await setEntryCompleted(current, true, { actingUserId: user.id });
+    setSaving(false);
+    if (error) return toast.error(error);
     toast.success("Marked complete");
     setQueue((prev) => prev.filter((e) => e.id !== current.id));
   }
@@ -104,9 +129,11 @@ export function DeadlineEscalationModal() {
   if (!current) return null;
 
   return (
-    <Modal open title="Overdue task" onClose={dismiss}>
+    <Modal open title={urgency === "overdue" ? "Overdue task" : "Due soon"} onClose={dismiss}>
       <p className="text-sm text-muted-foreground">
-        This task's deadline passed. What's the status?
+        {urgency === "overdue"
+          ? "This task's deadline passed. What's the status?"
+          : "This task is due within the hour."}
       </p>
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
         {current.content}
@@ -117,7 +144,10 @@ export function DeadlineEscalationModal() {
             Mark complete
           </Button>
           <Button variant="secondary" onClick={() => setMode("reschedule")} disabled={saving}>
-            Still going — reschedule
+            Extend deadline
+          </Button>
+          <Button variant="ghost" onClick={remindLater} disabled={saving}>
+            Remind me in 1 hour
           </Button>
         </div>
       ) : (

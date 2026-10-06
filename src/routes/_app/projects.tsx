@@ -120,7 +120,7 @@ function ProjectsPage() {
       .from("user_roles")
       .select("user_id")
       .in("role", ["super_admin", "tnq_team", "deccan_team"] as any);
-    const ids = (smeRoles ?? []).map((r) => r.user_id);
+    const ids = (smeRoles ?? []).map((r) => r.user_id).filter((id): id is string => id != null);
     if (ids.length) {
       const { data: profs } = await supabase
         .from("profiles")

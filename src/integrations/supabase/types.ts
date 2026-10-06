@@ -6,43 +6,68 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5";
   };
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
   public: {
     Tables: {
       activity_log: {
         Row: {
-          action: string;
-          action_type: Database["public"]["Enums"]["activity_action_type"];
-          details: Json | null;
+          action: string | null;
+          action_type: string | null;
+          details: string | null;
           field_changed: string | null;
           id: string;
           new_value: string | null;
           old_value: string | null;
           target: string | null;
-          timestamp: string;
+          timestamp: string | null;
           user_id: string | null;
         };
         Insert: {
-          action: string;
-          action_type?: Database["public"]["Enums"]["activity_action_type"];
-          details?: Json | null;
+          action?: string | null;
+          action_type?: string | null;
+          details?: string | null;
           field_changed?: string | null;
           id?: string;
           new_value?: string | null;
           old_value?: string | null;
           target?: string | null;
-          timestamp?: string;
+          timestamp?: string | null;
           user_id?: string | null;
         };
         Update: {
-          action?: string;
-          action_type?: Database["public"]["Enums"]["activity_action_type"];
-          details?: Json | null;
+          action?: string | null;
+          action_type?: string | null;
+          details?: string | null;
           field_changed?: string | null;
           id?: string;
           new_value?: string | null;
           old_value?: string | null;
           target?: string | null;
-          timestamp?: string;
+          timestamp?: string | null;
           user_id?: string | null;
         };
         Relationships: [];
@@ -88,19 +113,19 @@ export type Database = {
       contributor_achievements: {
         Row: {
           achievement_type: string;
-          contributor_id: string;
+          contributor_id: string | null;
           earned_at: string;
           id: string;
         };
         Insert: {
-          achievement_type: string;
-          contributor_id: string;
+          achievement_type?: string;
+          contributor_id?: string | null;
           earned_at?: string;
           id?: string;
         };
         Update: {
           achievement_type?: string;
-          contributor_id?: string;
+          contributor_id?: string | null;
           earned_at?: string;
           id?: string;
         };
@@ -109,29 +134,29 @@ export type Database = {
       contributor_progress: {
         Row: {
           completed_at: string | null;
-          contributor_id: string;
+          contributor_id: string | null;
           id: string;
           learning_path_id: string | null;
           module_id: string | null;
-          status: Database["public"]["Enums"]["progress_status"];
+          status: string;
           updated_at: string;
         };
         Insert: {
           completed_at?: string | null;
-          contributor_id: string;
+          contributor_id?: string | null;
           id?: string;
           learning_path_id?: string | null;
           module_id?: string | null;
-          status?: Database["public"]["Enums"]["progress_status"];
+          status?: string;
           updated_at?: string;
         };
         Update: {
           completed_at?: string | null;
-          contributor_id?: string;
+          contributor_id?: string | null;
           id?: string;
           learning_path_id?: string | null;
           module_id?: string | null;
-          status?: Database["public"]["Enums"]["progress_status"];
+          status?: string;
           updated_at?: string;
         };
         Relationships: [
@@ -156,8 +181,8 @@ export type Database = {
           id: string;
           last_active_at: string | null;
           learning_path_id: string | null;
-          onboarding_stage: number;
-          onboarding_status: Database["public"]["Enums"]["onboarding_status"];
+          onboarding_stage: number | null;
+          onboarding_status: string | null;
           playground_id: string | null;
           projects: string[] | null;
           sme_id: string | null;
@@ -166,8 +191,8 @@ export type Database = {
           id: string;
           last_active_at?: string | null;
           learning_path_id?: string | null;
-          onboarding_stage?: number;
-          onboarding_status?: Database["public"]["Enums"]["onboarding_status"];
+          onboarding_stage?: number | null;
+          onboarding_status?: string | null;
           playground_id?: string | null;
           projects?: string[] | null;
           sme_id?: string | null;
@@ -176,33 +201,19 @@ export type Database = {
           id?: string;
           last_active_at?: string | null;
           learning_path_id?: string | null;
-          onboarding_stage?: number;
-          onboarding_status?: Database["public"]["Enums"]["onboarding_status"];
+          onboarding_stage?: number | null;
+          onboarding_status?: string | null;
           playground_id?: string | null;
           projects?: string[] | null;
           sme_id?: string | null;
         };
-        Relationships: [
-          {
-            foreignKeyName: "contributors_learning_path_id_fkey";
-            columns: ["learning_path_id"];
-            isOneToOne: false;
-            referencedRelation: "learning_paths";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "contributors_playground_id_fkey";
-            columns: ["playground_id"];
-            isOneToOne: false;
-            referencedRelation: "playgrounds";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
       learning_path_items: {
         Row: {
           created_at: string;
           created_by: string | null;
+          deccanexperts_url: string | null;
           display_order: number;
           id: string;
           is_live: boolean;
@@ -218,6 +229,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           created_by?: string | null;
+          deccanexperts_url?: string | null;
           display_order?: number;
           id?: string;
           is_live?: boolean;
@@ -233,6 +245,7 @@ export type Database = {
         Update: {
           created_at?: string;
           created_by?: string | null;
+          deccanexperts_url?: string | null;
           display_order?: number;
           id?: string;
           is_live?: boolean;
@@ -261,30 +274,30 @@ export type Database = {
           created_at: string;
           estimated_minutes: number | null;
           id: string;
-          learning_path_id: string;
+          learning_path_id: string | null;
           order_index: number;
           title: string;
-          type: Database["public"]["Enums"]["module_type"];
+          type: string;
         };
         Insert: {
           completion_criteria?: string | null;
           created_at?: string;
           estimated_minutes?: number | null;
           id?: string;
-          learning_path_id: string;
+          learning_path_id?: string | null;
           order_index?: number;
-          title: string;
-          type?: Database["public"]["Enums"]["module_type"];
+          title?: string;
+          type?: string;
         };
         Update: {
           completion_criteria?: string | null;
           created_at?: string;
           estimated_minutes?: number | null;
           id?: string;
-          learning_path_id?: string;
+          learning_path_id?: string | null;
           order_index?: number;
           title?: string;
-          type?: Database["public"]["Enums"]["module_type"];
+          type?: string;
         };
         Relationships: [
           {
@@ -298,31 +311,49 @@ export type Database = {
       };
       learning_paths: {
         Row: {
-          created_at: string;
+          created_at: string | null;
           created_by: string | null;
+          display_order: number | null;
           id: string;
-          last_updated: string;
+          is_live: boolean | null;
+          last_updated: string | null;
           last_updated_by: string | null;
+          live_since: string | null;
           name: string;
+          production_url: string | null;
           project_id: string | null;
+          user_url: string | null;
+          version: string | null;
         };
         Insert: {
-          created_at?: string;
+          created_at?: string | null;
           created_by?: string | null;
+          display_order?: number | null;
           id?: string;
-          last_updated?: string;
+          is_live?: boolean | null;
+          last_updated?: string | null;
           last_updated_by?: string | null;
+          live_since?: string | null;
           name: string;
+          production_url?: string | null;
           project_id?: string | null;
+          user_url?: string | null;
+          version?: string | null;
         };
         Update: {
-          created_at?: string;
+          created_at?: string | null;
           created_by?: string | null;
+          display_order?: number | null;
           id?: string;
-          last_updated?: string;
+          is_live?: boolean | null;
+          last_updated?: string | null;
           last_updated_by?: string | null;
+          live_since?: string | null;
           name?: string;
+          production_url?: string | null;
           project_id?: string | null;
+          user_url?: string | null;
+          version?: string | null;
         };
         Relationships: [
           {
@@ -336,95 +367,47 @@ export type Database = {
       };
       newcomer_resources: {
         Row: {
-          created_at: string;
           doc_label: string | null;
           doc_url: string | null;
           id: string;
-          last_updated: string;
+          last_updated: string | null;
           last_updated_by: string | null;
           notes: string | null;
           poc_user_id: string | null;
-          project_id: string;
+          project_id: string | null;
           video_label: string | null;
           video_url: string | null;
         };
         Insert: {
-          created_at?: string;
           doc_label?: string | null;
           doc_url?: string | null;
           id?: string;
-          last_updated?: string;
+          last_updated?: string | null;
           last_updated_by?: string | null;
           notes?: string | null;
           poc_user_id?: string | null;
-          project_id: string;
+          project_id?: string | null;
           video_label?: string | null;
           video_url?: string | null;
         };
         Update: {
-          created_at?: string;
           doc_label?: string | null;
           doc_url?: string | null;
           id?: string;
-          last_updated?: string;
+          last_updated?: string | null;
           last_updated_by?: string | null;
           notes?: string | null;
           poc_user_id?: string | null;
-          project_id?: string;
+          project_id?: string | null;
           video_label?: string | null;
           video_url?: string | null;
         };
         Relationships: [
-          {
-            foreignKeyName: "newcomer_resources_poc_user_id_fkey";
-            columns: ["poc_user_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "newcomer_resources_project_id_fkey";
             columns: ["project_id"];
-            isOneToOne: true;
-            referencedRelation: "projects";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      playground_activity: {
-        Row: {
-          action: string;
-          created_at: string;
-          details: Json | null;
-          id: string;
-          playground_id: string;
-          section: string | null;
-          user_id: string | null;
-        };
-        Insert: {
-          action: string;
-          created_at?: string;
-          details?: Json | null;
-          id?: string;
-          playground_id: string;
-          section?: string | null;
-          user_id?: string | null;
-        };
-        Update: {
-          action?: string;
-          created_at?: string;
-          details?: Json | null;
-          id?: string;
-          playground_id?: string;
-          section?: string | null;
-          user_id?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "playground_activity_playground_id_fkey";
-            columns: ["playground_id"];
             isOneToOne: false;
-            referencedRelation: "playgrounds";
+            referencedRelation: "projects";
             referencedColumns: ["id"];
           },
         ];
@@ -437,18 +420,18 @@ export type Database = {
           last_updated_by: string | null;
           notes: string | null;
           owner_id: string | null;
-          playground_id: string;
-          status: Database["public"]["Enums"]["content_item_status"];
+          playground_id: string | null;
+          status: string;
         };
         Insert: {
-          component_name: string;
+          component_name?: string;
           id?: string;
           last_updated?: string;
           last_updated_by?: string | null;
           notes?: string | null;
           owner_id?: string | null;
-          playground_id: string;
-          status?: Database["public"]["Enums"]["content_item_status"];
+          playground_id?: string | null;
+          status?: string;
         };
         Update: {
           component_name?: string;
@@ -457,8 +440,8 @@ export type Database = {
           last_updated_by?: string | null;
           notes?: string | null;
           owner_id?: string | null;
-          playground_id?: string;
-          status?: Database["public"]["Enums"]["content_item_status"];
+          playground_id?: string | null;
+          status?: string;
         };
         Relationships: [
           {
@@ -475,7 +458,7 @@ export type Database = {
           file_size: number | null;
           id: string;
           name: string;
-          playground_id: string;
+          playground_id: string | null;
           type: string | null;
           uploaded_at: string;
           uploaded_by: string | null;
@@ -485,19 +468,19 @@ export type Database = {
         Insert: {
           file_size?: number | null;
           id?: string;
-          name: string;
-          playground_id: string;
+          name?: string;
+          playground_id?: string | null;
           type?: string | null;
           uploaded_at?: string;
           uploaded_by?: string | null;
-          url: string;
+          url?: string;
           version_number?: string | null;
         };
         Update: {
           file_size?: number | null;
           id?: string;
           name?: string;
-          playground_id?: string;
+          playground_id?: string | null;
           type?: string | null;
           uploaded_at?: string;
           uploaded_by?: string | null;
@@ -514,94 +497,6 @@ export type Database = {
           },
         ];
       };
-      playground_nodes: {
-        Row: {
-          id: string;
-          last_updated: string;
-          order_index: number;
-          owner_id: string | null;
-          playground_id: string;
-          status: string | null;
-          title: string;
-          type: string | null;
-        };
-        Insert: {
-          id?: string;
-          last_updated?: string;
-          order_index?: number;
-          owner_id?: string | null;
-          playground_id: string;
-          status?: string | null;
-          title: string;
-          type?: string | null;
-        };
-        Update: {
-          id?: string;
-          last_updated?: string;
-          order_index?: number;
-          owner_id?: string | null;
-          playground_id?: string;
-          status?: string | null;
-          title?: string;
-          type?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "playground_nodes_playground_id_fkey";
-            columns: ["playground_id"];
-            isOneToOne: false;
-            referencedRelation: "playgrounds";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      playground_reviews: {
-        Row: {
-          created_at: string;
-          feedback: string | null;
-          id: string;
-          playground_id: string;
-          requested_changes: string | null;
-          resolution: string | null;
-          review_type: Database["public"]["Enums"]["review_type"];
-          reviewer_id: string | null;
-          status: Database["public"]["Enums"]["review_status"];
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          feedback?: string | null;
-          id?: string;
-          playground_id: string;
-          requested_changes?: string | null;
-          resolution?: string | null;
-          review_type: Database["public"]["Enums"]["review_type"];
-          reviewer_id?: string | null;
-          status?: Database["public"]["Enums"]["review_status"];
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          feedback?: string | null;
-          id?: string;
-          playground_id?: string;
-          requested_changes?: string | null;
-          resolution?: string | null;
-          review_type?: Database["public"]["Enums"]["review_type"];
-          reviewer_id?: string | null;
-          status?: Database["public"]["Enums"]["review_status"];
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "playground_reviews_playground_id_fkey";
-            columns: ["playground_id"];
-            isOneToOne: false;
-            referencedRelation: "playgrounds";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       playgrounds: {
         Row: {
           access_type: string | null;
@@ -609,27 +504,31 @@ export type Database = {
           active_users_count: number | null;
           content_owner_id: string | null;
           content_url: string | null;
-          created_at: string;
+          created_at: string | null;
           created_by: string | null;
           dashboard_url: string | null;
+          deccanexperts_url: string | null;
           description: string | null;
-          display_order: number;
+          display_order: number | null;
           docs_url: string | null;
           estimated_duration: string | null;
           id: string;
-          is_live: boolean;
-          last_updated: string;
+          is_live: boolean | null;
+          last_updated: string | null;
           last_updated_by: string | null;
           learning_objectives: string[] | null;
           learning_path_id: string | null;
           live_since: string | null;
           name: string;
-          progress_percent: number;
+          playground_id: string | null;
+          playground_url: string | null;
+          progress_percent: number | null;
           project_id: string | null;
           reviewer_ids: string[] | null;
           sme_owner_id: string | null;
-          status: Database["public"]["Enums"]["playground_status"];
+          status: string | null;
           target_go_live: string | null;
+          version: string | null;
           version_number: string | null;
           workflow_stage: string | null;
         };
@@ -639,27 +538,31 @@ export type Database = {
           active_users_count?: number | null;
           content_owner_id?: string | null;
           content_url?: string | null;
-          created_at?: string;
+          created_at?: string | null;
           created_by?: string | null;
           dashboard_url?: string | null;
+          deccanexperts_url?: string | null;
           description?: string | null;
-          display_order?: number;
+          display_order?: number | null;
           docs_url?: string | null;
           estimated_duration?: string | null;
           id?: string;
-          is_live?: boolean;
-          last_updated?: string;
+          is_live?: boolean | null;
+          last_updated?: string | null;
           last_updated_by?: string | null;
           learning_objectives?: string[] | null;
           learning_path_id?: string | null;
           live_since?: string | null;
           name: string;
-          progress_percent?: number;
+          playground_id?: string | null;
+          playground_url?: string | null;
+          progress_percent?: number | null;
           project_id?: string | null;
           reviewer_ids?: string[] | null;
           sme_owner_id?: string | null;
-          status?: Database["public"]["Enums"]["playground_status"];
+          status?: string | null;
           target_go_live?: string | null;
+          version?: string | null;
           version_number?: string | null;
           workflow_stage?: string | null;
         };
@@ -669,27 +572,31 @@ export type Database = {
           active_users_count?: number | null;
           content_owner_id?: string | null;
           content_url?: string | null;
-          created_at?: string;
+          created_at?: string | null;
           created_by?: string | null;
           dashboard_url?: string | null;
+          deccanexperts_url?: string | null;
           description?: string | null;
-          display_order?: number;
+          display_order?: number | null;
           docs_url?: string | null;
           estimated_duration?: string | null;
           id?: string;
-          is_live?: boolean;
-          last_updated?: string;
+          is_live?: boolean | null;
+          last_updated?: string | null;
           last_updated_by?: string | null;
           learning_objectives?: string[] | null;
           learning_path_id?: string | null;
           live_since?: string | null;
           name?: string;
-          progress_percent?: number;
+          playground_id?: string | null;
+          playground_url?: string | null;
+          progress_percent?: number | null;
           project_id?: string | null;
           reviewer_ids?: string[] | null;
           sme_owner_id?: string | null;
-          status?: Database["public"]["Enums"]["playground_status"];
+          status?: string | null;
           target_go_live?: string | null;
+          version?: string | null;
           version_number?: string | null;
           workflow_stage?: string | null;
         };
@@ -712,27 +619,27 @@ export type Database = {
       };
       profiles: {
         Row: {
-          created_at: string;
+          created_at: string | null;
           email: string | null;
-          first_login: boolean;
+          first_login: boolean | null;
           id: string;
           last_active: string | null;
           name: string | null;
           photo_url: string | null;
         };
         Insert: {
-          created_at?: string;
+          created_at?: string | null;
           email?: string | null;
-          first_login?: boolean;
+          first_login?: boolean | null;
           id: string;
           last_active?: string | null;
           name?: string | null;
           photo_url?: string | null;
         };
         Update: {
-          created_at?: string;
+          created_at?: string | null;
           email?: string | null;
-          first_login?: boolean;
+          first_login?: boolean | null;
           id?: string;
           last_active?: string | null;
           name?: string | null;
@@ -740,39 +647,71 @@ export type Database = {
         };
         Relationships: [];
       };
-      project_links: {
+      project_co_owners: {
         Row: {
-          added_at: string;
-          added_by: string | null;
+          added_at: string | null;
           id: string;
-          label: string;
-          link_type: string;
-          project_id: string;
-          updated_at: string;
-          updated_by: string | null;
-          url: string;
+          project_id: string | null;
+          user_id: string | null;
+          working_on: string | null;
         };
         Insert: {
-          added_at?: string;
-          added_by?: string | null;
+          added_at?: string | null;
           id?: string;
-          label: string;
-          link_type: string;
-          project_id: string;
-          updated_at?: string;
-          updated_by?: string | null;
-          url: string;
+          project_id?: string | null;
+          user_id?: string | null;
+          working_on?: string | null;
         };
         Update: {
-          added_at?: string;
+          added_at?: string | null;
+          id?: string;
+          project_id?: string | null;
+          user_id?: string | null;
+          working_on?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_co_owners_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_links: {
+        Row: {
+          added_at: string | null;
+          added_by: string | null;
+          id: string;
+          label: string | null;
+          link_type: string | null;
+          project_id: string | null;
+          updated_at: string | null;
+          updated_by: string | null;
+          url: string | null;
+        };
+        Insert: {
+          added_at?: string | null;
           added_by?: string | null;
           id?: string;
-          label?: string;
-          link_type?: string;
-          project_id?: string;
-          updated_at?: string;
+          label?: string | null;
+          link_type?: string | null;
+          project_id?: string | null;
+          updated_at?: string | null;
           updated_by?: string | null;
-          url?: string;
+          url?: string | null;
+        };
+        Update: {
+          added_at?: string | null;
+          added_by?: string | null;
+          id?: string;
+          label?: string | null;
+          link_type?: string | null;
+          project_id?: string | null;
+          updated_at?: string | null;
+          updated_by?: string | null;
+          url?: string | null;
         };
         Relationships: [
           {
@@ -787,9 +726,8 @@ export type Database = {
       projects: {
         Row: {
           audience_type: string | null;
-          auditing_live: boolean;
           auditing_status: string;
-          created_at: string;
+          created_at: string | null;
           current_owner_ids: string[] | null;
           description: string | null;
           domain: string | null;
@@ -797,24 +735,23 @@ export type Database = {
           given_name: string | null;
           guidelines_url: string | null;
           id: string;
-          last_updated: string;
+          last_updated: string | null;
           last_updated_by: string | null;
           links: string | null;
           name: string;
           previous_owner_ids: string[] | null;
-          quick_link: string | null;
           sme_owner_id: string | null;
-          status: Database["public"]["Enums"]["project_status"];
-          tasking_live: boolean;
+          status: string | null;
+          tasking_live: boolean | null;
           updated_at: string;
           updated_by: string | null;
+          user_analytics_url: string | null;
           version: string | null;
         };
         Insert: {
           audience_type?: string | null;
-          auditing_live?: boolean;
           auditing_status?: string;
-          created_at?: string;
+          created_at?: string | null;
           current_owner_ids?: string[] | null;
           description?: string | null;
           domain?: string | null;
@@ -822,24 +759,23 @@ export type Database = {
           given_name?: string | null;
           guidelines_url?: string | null;
           id?: string;
-          last_updated?: string;
+          last_updated?: string | null;
           last_updated_by?: string | null;
           links?: string | null;
           name: string;
           previous_owner_ids?: string[] | null;
-          quick_link?: string | null;
           sme_owner_id?: string | null;
-          status?: Database["public"]["Enums"]["project_status"];
-          tasking_live?: boolean;
+          status?: string | null;
+          tasking_live?: boolean | null;
           updated_at?: string;
           updated_by?: string | null;
+          user_analytics_url?: string | null;
           version?: string | null;
         };
         Update: {
           audience_type?: string | null;
-          auditing_live?: boolean;
           auditing_status?: string;
-          created_at?: string;
+          created_at?: string | null;
           current_owner_ids?: string[] | null;
           description?: string | null;
           domain?: string | null;
@@ -847,51 +783,78 @@ export type Database = {
           given_name?: string | null;
           guidelines_url?: string | null;
           id?: string;
-          last_updated?: string;
+          last_updated?: string | null;
           last_updated_by?: string | null;
           links?: string | null;
           name?: string;
           previous_owner_ids?: string[] | null;
-          quick_link?: string | null;
           sme_owner_id?: string | null;
-          status?: Database["public"]["Enums"]["project_status"];
-          tasking_live?: boolean;
+          status?: string | null;
+          tasking_live?: boolean | null;
           updated_at?: string;
           updated_by?: string | null;
+          user_analytics_url?: string | null;
           version?: string | null;
+        };
+        Relationships: [];
+      };
+      push_subscriptions: {
+        Row: {
+          auth: string;
+          created_at: string;
+          endpoint: string;
+          id: string;
+          p256dh: string;
+          user_id: string;
+        };
+        Insert: {
+          auth: string;
+          created_at?: string;
+          endpoint: string;
+          id?: string;
+          p256dh: string;
+          user_id: string;
+        };
+        Update: {
+          auth?: string;
+          created_at?: string;
+          endpoint?: string;
+          id?: string;
+          p256dh?: string;
+          user_id?: string;
         };
         Relationships: [];
       };
       quality_issues: {
         Row: {
           contributor_id: string | null;
-          date: string;
+          date: string | null;
           id: string;
-          issue: string;
+          issue: string | null;
           notes: string | null;
           project_id: string | null;
           sme_id: string | null;
-          status: Database["public"]["Enums"]["issue_status"];
+          status: string | null;
         };
         Insert: {
           contributor_id?: string | null;
-          date?: string;
+          date?: string | null;
           id?: string;
-          issue: string;
+          issue?: string | null;
           notes?: string | null;
           project_id?: string | null;
           sme_id?: string | null;
-          status?: Database["public"]["Enums"]["issue_status"];
+          status?: string | null;
         };
         Update: {
           contributor_id?: string | null;
-          date?: string;
+          date?: string | null;
           id?: string;
-          issue?: string;
+          issue?: string | null;
           notes?: string | null;
           project_id?: string | null;
           sme_id?: string | null;
-          status?: Database["public"]["Enums"]["issue_status"];
+          status?: string | null;
         };
         Relationships: [
           {
@@ -903,57 +866,33 @@ export type Database = {
           },
         ];
       };
-      quality_notes: {
-        Row: {
-          contributor_id: string;
-          created_at: string;
-          created_by: string | null;
-          id: string;
-          note_text: string;
-        };
-        Insert: {
-          contributor_id: string;
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          note_text: string;
-        };
-        Update: {
-          contributor_id?: string;
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          note_text?: string;
-        };
-        Relationships: [];
-      };
       quality_scores: {
         Row: {
-          contributor_id: string;
+          contributor_id: string | null;
           id: string;
           notes: string | null;
           project_id: string | null;
-          review_date: string;
+          review_date: string | null;
           reviewed_by: string | null;
-          score: number;
+          score: number | null;
         };
         Insert: {
-          contributor_id: string;
+          contributor_id?: string | null;
           id?: string;
           notes?: string | null;
           project_id?: string | null;
-          review_date?: string;
+          review_date?: string | null;
           reviewed_by?: string | null;
-          score: number;
+          score?: number | null;
         };
         Update: {
-          contributor_id?: string;
+          contributor_id?: string | null;
           id?: string;
           notes?: string | null;
           project_id?: string | null;
-          review_date?: string;
+          review_date?: string | null;
           reviewed_by?: string | null;
-          score?: number;
+          score?: number | null;
         };
         Relationships: [
           {
@@ -969,7 +908,7 @@ export type Database = {
         Row: {
           id: string;
           last_synced: string | null;
-          linked_at: string;
+          linked_at: string | null;
           linked_by: string | null;
           sheet_csv_url: string | null;
           sheet_embed_url: string | null;
@@ -978,7 +917,7 @@ export type Database = {
         Insert: {
           id?: string;
           last_synced?: string | null;
-          linked_at?: string;
+          linked_at?: string | null;
           linked_by?: string | null;
           sheet_csv_url?: string | null;
           sheet_embed_url?: string | null;
@@ -987,7 +926,7 @@ export type Database = {
         Update: {
           id?: string;
           last_synced?: string | null;
-          linked_at?: string;
+          linked_at?: string | null;
           linked_by?: string | null;
           sheet_csv_url?: string | null;
           sheet_embed_url?: string | null;
@@ -995,68 +934,147 @@ export type Database = {
         };
         Relationships: [];
       };
-      resource_grants: {
+      recognition_posts: {
         Row: {
-          granted_at: string;
-          granted_by: string | null;
+          created_at: string;
+          given_by: string;
           id: string;
-          permission: Database["public"]["Enums"]["permission_level"];
-          resource_id: string;
-          resource_type: string;
+          message: string;
+        };
+        Insert: {
+          created_at?: string;
+          given_by: string;
+          id?: string;
+          message: string;
+        };
+        Update: {
+          created_at?: string;
+          given_by?: string;
+          id?: string;
+          message?: string;
+        };
+        Relationships: [];
+      };
+      recognition_reactions: {
+        Row: {
+          created_at: string;
+          emoji: string;
+          id: string;
+          post_id: string;
           user_id: string;
         };
         Insert: {
-          granted_at?: string;
-          granted_by?: string | null;
+          created_at?: string;
+          emoji: string;
           id?: string;
-          permission?: Database["public"]["Enums"]["permission_level"];
-          resource_id: string;
-          resource_type: string;
+          post_id: string;
           user_id: string;
         };
         Update: {
-          granted_at?: string;
+          created_at?: string;
+          emoji?: string;
+          id?: string;
+          post_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recognition_reactions_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "recognition_posts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recognition_recipients: {
+        Row: {
+          contributor_id: string;
+          id: string;
+          post_id: string;
+        };
+        Insert: {
+          contributor_id: string;
+          id?: string;
+          post_id: string;
+        };
+        Update: {
+          contributor_id?: string;
+          id?: string;
+          post_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recognition_recipients_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "recognition_posts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      resource_grants: {
+        Row: {
+          granted_at: string | null;
+          granted_by: string | null;
+          id: string;
+          permission: string | null;
+          resource_id: string | null;
+          resource_type: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          granted_at?: string | null;
           granted_by?: string | null;
           id?: string;
-          permission?: Database["public"]["Enums"]["permission_level"];
-          resource_id?: string;
-          resource_type?: string;
-          user_id?: string;
+          permission?: string | null;
+          resource_id?: string | null;
+          resource_type?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          granted_at?: string | null;
+          granted_by?: string | null;
+          id?: string;
+          permission?: string | null;
+          resource_id?: string | null;
+          resource_type?: string | null;
+          user_id?: string | null;
         };
         Relationships: [];
       };
       resources: {
         Row: {
-          category: Database["public"]["Enums"]["resource_category"];
-          date: string;
+          category: string | null;
+          date: string | null;
           file_type: string | null;
           id: string;
           name: string;
           tags: string[] | null;
           uploaded_by: string | null;
-          url: string;
+          url: string | null;
           visible_to: string[] | null;
         };
         Insert: {
-          category?: Database["public"]["Enums"]["resource_category"];
-          date?: string;
+          category?: string | null;
+          date?: string | null;
           file_type?: string | null;
           id?: string;
           name: string;
           tags?: string[] | null;
           uploaded_by?: string | null;
-          url: string;
+          url?: string | null;
           visible_to?: string[] | null;
         };
         Update: {
-          category?: Database["public"]["Enums"]["resource_category"];
-          date?: string;
+          category?: string | null;
+          date?: string | null;
           file_type?: string | null;
           id?: string;
           name?: string;
           tags?: string[] | null;
           uploaded_by?: string | null;
-          url?: string;
+          url?: string | null;
           visible_to?: string[] | null;
         };
         Relationships: [];
@@ -1065,16 +1083,19 @@ export type Database = {
         Row: {
           id: string;
           key: string;
+          updated_at: string | null;
           value: string | null;
         };
         Insert: {
           id?: string;
           key: string;
+          updated_at?: string | null;
           value?: string | null;
         };
         Update: {
           id?: string;
           key?: string;
+          updated_at?: string | null;
           value?: string | null;
         };
         Relationships: [];
@@ -1082,81 +1103,54 @@ export type Database = {
       user_roles: {
         Row: {
           assigned_sme_id: string | null;
-          created_at: string;
+          created_at: string | null;
           id: string;
-          role: Database["public"]["Enums"]["app_role"];
-          status: Database["public"]["Enums"]["user_status"];
-          updated_at: string;
-          user_id: string;
+          role: string | null;
+          status: string | null;
+          updated_at: string | null;
+          user_id: string | null;
         };
         Insert: {
           assigned_sme_id?: string | null;
-          created_at?: string;
+          created_at?: string | null;
           id?: string;
-          role?: Database["public"]["Enums"]["app_role"];
-          status?: Database["public"]["Enums"]["user_status"];
-          updated_at?: string;
-          user_id: string;
+          role?: string | null;
+          status?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
         };
         Update: {
           assigned_sme_id?: string | null;
-          created_at?: string;
+          created_at?: string | null;
           id?: string;
-          role?: Database["public"]["Enums"]["app_role"];
-          status?: Database["public"]["Enums"]["user_status"];
-          updated_at?: string;
-          user_id?: string;
-        };
-        Relationships: [];
-      };
-      wall_of_excellence: {
-        Row: {
-          awarded_at: string;
-          awarded_by: string | null;
-          category: string;
-          id: string;
-          note: string | null;
-          user_id: string;
-        };
-        Insert: {
-          awarded_at?: string;
-          awarded_by?: string | null;
-          category: string;
-          id?: string;
-          note?: string | null;
-          user_id: string;
-        };
-        Update: {
-          awarded_at?: string;
-          awarded_by?: string | null;
-          category?: string;
-          id?: string;
-          note?: string | null;
-          user_id?: string;
+          role?: string | null;
+          status?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
         };
         Relationships: [];
       };
       work_log_comments: {
         Row: {
-          content: string;
+          author_id: string;
+          body: string;
           created_at: string;
           entry_id: string;
           id: string;
-          user_id: string;
         };
         Insert: {
-          content: string;
+          author_id: string;
+          body: string;
           created_at?: string;
           entry_id: string;
           id?: string;
-          user_id: string;
         };
         Update: {
-          content?: string;
+          author_id?: string;
+          body?: string;
           created_at?: string;
           entry_id?: string;
           id?: string;
-          user_id?: string;
         };
         Relationships: [
           {
@@ -1168,33 +1162,104 @@ export type Database = {
           },
         ];
       };
-      work_log_entries: {
+      work_log_delay_log: {
         Row: {
-          content: string;
           created_at: string;
-          entry_type: string;
+          entry_id: string;
+          explanation: string | null;
           id: string;
-          project_id: string | null;
-          updated_at: string;
+          new_deadline: string;
+          old_deadline: string;
+          reason: string;
           user_id: string;
         };
         Insert: {
-          content: string;
           created_at?: string;
-          entry_type: string;
+          entry_id: string;
+          explanation?: string | null;
           id?: string;
-          project_id?: string | null;
-          updated_at?: string;
+          new_deadline: string;
+          old_deadline: string;
+          reason: string;
           user_id: string;
         };
         Update: {
-          content?: string;
           created_at?: string;
-          entry_type?: string;
+          entry_id?: string;
+          explanation?: string | null;
           id?: string;
-          project_id?: string | null;
-          updated_at?: string;
+          new_deadline?: string;
+          old_deadline?: string;
+          reason?: string;
           user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "work_log_delay_log_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "work_log_entries";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      work_log_entries: {
+        Row: {
+          completed_at: string | null;
+          completed_at_estimated: boolean;
+          content: string | null;
+          created_at: string | null;
+          deadline: string | null;
+          deadline_updated_at: string | null;
+          entry_type: string | null;
+          id: string;
+          overdue_notified_at: string | null;
+          p0_escalation_sent_at: string | null;
+          previous_entry_type: string | null;
+          priority: string | null;
+          project_id: string | null;
+          reminder_sent_at: string | null;
+          snoozed_until: string | null;
+          updated_at: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          completed_at?: string | null;
+          completed_at_estimated?: boolean;
+          content?: string | null;
+          created_at?: string | null;
+          deadline?: string | null;
+          deadline_updated_at?: string | null;
+          entry_type?: string | null;
+          id?: string;
+          overdue_notified_at?: string | null;
+          p0_escalation_sent_at?: string | null;
+          previous_entry_type?: string | null;
+          priority?: string | null;
+          project_id?: string | null;
+          reminder_sent_at?: string | null;
+          snoozed_until?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          completed_at?: string | null;
+          completed_at_estimated?: boolean;
+          content?: string | null;
+          created_at?: string | null;
+          deadline?: string | null;
+          deadline_updated_at?: string | null;
+          entry_type?: string | null;
+          id?: string;
+          overdue_notified_at?: string | null;
+          p0_escalation_sent_at?: string | null;
+          previous_entry_type?: string | null;
+          priority?: string | null;
+          project_id?: string | null;
+          reminder_sent_at?: string | null;
+          snoozed_until?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
         };
         Relationships: [
           {
@@ -1206,31 +1271,107 @@ export type Database = {
           },
         ];
       };
-      work_log_reactions: {
+      work_log_entry_status_history: {
+        Row: {
+          changed_at: string;
+          changed_by: string | null;
+          entry_id: string;
+          from_type: string | null;
+          id: string;
+          to_type: string;
+        };
+        Insert: {
+          changed_at?: string;
+          changed_by?: string | null;
+          entry_id: string;
+          from_type?: string | null;
+          id?: string;
+          to_type: string;
+        };
+        Update: {
+          changed_at?: string;
+          changed_by?: string | null;
+          entry_id?: string;
+          from_type?: string | null;
+          id?: string;
+          to_type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "work_log_entry_status_history_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "work_log_entries";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      work_log_nudges: {
+        Row: {
+          created_at: string;
+          entry_id: string;
+          from_user: string;
+          id: string;
+          to_user: string;
+        };
+        Insert: {
+          created_at?: string;
+          entry_id: string;
+          from_user: string;
+          id?: string;
+          to_user: string;
+        };
+        Update: {
+          created_at?: string;
+          entry_id?: string;
+          from_user?: string;
+          id?: string;
+          to_user?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "work_log_nudges_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "work_log_entries";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      work_log_review_requests: {
         Row: {
           created_at: string;
           entry_id: string;
           id: string;
-          reaction_type: string;
-          user_id: string;
+          reminder_last_sent_at: string | null;
+          requested_by: string;
+          reviewed_at: string | null;
+          reviewer_id: string;
+          status: string;
         };
         Insert: {
           created_at?: string;
           entry_id: string;
           id?: string;
-          reaction_type?: string;
-          user_id: string;
+          reminder_last_sent_at?: string | null;
+          requested_by: string;
+          reviewed_at?: string | null;
+          reviewer_id: string;
+          status?: string;
         };
         Update: {
           created_at?: string;
           entry_id?: string;
           id?: string;
-          reaction_type?: string;
-          user_id?: string;
+          reminder_last_sent_at?: string | null;
+          requested_by?: string;
+          reviewed_at?: string | null;
+          reviewer_id?: string;
+          status?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "work_log_reactions_entry_id_fkey";
+            foreignKeyName: "work_log_review_requests_entry_id_fkey";
             columns: ["entry_id"];
             isOneToOne: false;
             referencedRelation: "work_log_entries";
@@ -1270,50 +1411,17 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      current_role: {
-        Args: never;
-        Returns: Database["public"]["Enums"]["app_role"];
+      cancel_review_on_completion: {
+        Args: { request_id: string };
+        Returns: undefined;
       };
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"];
-          _user_id: string;
-        };
-        Returns: boolean;
-      };
+      current_role: { Args: never; Returns: string };
+      has_role: { Args: { _role: string; _user_id: string }; Returns: boolean };
       is_admin: { Args: never; Returns: boolean };
       is_sme: { Args: never; Returns: boolean };
     };
     Enums: {
-      activity_action_type:
-        | "created"
-        | "updated"
-        | "deleted"
-        | "login"
-        | "role_changed"
-        | "grant_added"
-        | "grant_revoked";
-      app_role: "super_admin" | "tnq_team" | "contributor" | "pending";
-      content_item_status: "not_started" | "in_progress" | "completed" | "needs_revision";
-      issue_status: "open" | "resolved";
-      module_type: "video" | "reading" | "quiz" | "assessment";
-      onboarding_status: "not_started" | "in_progress" | "complete";
-      permission_level: "view_only" | "can_edit" | "can_upload" | "full_access";
-      playground_status:
-        | "not_started"
-        | "in_progress"
-        | "under_sme_review"
-        | "under_qa_review"
-        | "needs_revision"
-        | "ready_for_publishing"
-        | "live"
-        | "archived";
-      progress_status: "locked" | "available" | "complete";
-      project_status: "active" | "paused" | "completed";
-      resource_category: "team_sheet" | "project_doc" | "template" | "external_link";
-      review_status: "pending" | "approved" | "approved_with_changes" | "rejected";
-      review_type: "sme" | "qa" | "content";
-      user_status: "active" | "suspended" | "pending";
+      [_ in never]: never;
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -1437,39 +1545,10 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
-    Enums: {
-      activity_action_type: [
-        "created",
-        "updated",
-        "deleted",
-        "login",
-        "role_changed",
-        "grant_added",
-        "grant_revoked",
-      ],
-      app_role: ["super_admin", "tnq_team", "contributor", "pending"],
-      content_item_status: ["not_started", "in_progress", "completed", "needs_revision"],
-      issue_status: ["open", "resolved"],
-      module_type: ["video", "reading", "quiz", "assessment"],
-      onboarding_status: ["not_started", "in_progress", "complete"],
-      permission_level: ["view_only", "can_edit", "can_upload", "full_access"],
-      playground_status: [
-        "not_started",
-        "in_progress",
-        "under_sme_review",
-        "under_qa_review",
-        "needs_revision",
-        "ready_for_publishing",
-        "live",
-        "archived",
-      ],
-      progress_status: ["locked", "available", "complete"],
-      project_status: ["active", "paused", "completed"],
-      resource_category: ["team_sheet", "project_doc", "template", "external_link"],
-      review_status: ["pending", "approved", "approved_with_changes", "rejected"],
-      review_type: ["sme", "qa", "content"],
-      user_status: ["active", "suspended", "pending"],
-    },
+    Enums: {},
   },
 } as const;

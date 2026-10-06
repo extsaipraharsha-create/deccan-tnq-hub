@@ -40,7 +40,7 @@ function UsersPage() {
       .from("user_roles")
       .select("user_id,role,status")
       .order("created_at", { ascending: false });
-    const ids = (roles ?? []).map((r) => r.user_id);
+    const ids = (roles ?? []).map((r) => r.user_id).filter((id): id is string => id != null);
     const { data: profiles } = ids.length
       ? await supabase.from("profiles").select("id,name,email,photo_url").in("id", ids)
       : { data: [] as any[] };

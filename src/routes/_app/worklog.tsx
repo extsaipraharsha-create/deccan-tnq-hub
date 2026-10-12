@@ -1072,12 +1072,18 @@ function WorkLogPage() {
         ? Math.floor((today.getTime() - new Date(lastActivityAt).getTime()) / (1000 * 60 * 60 * 24))
         : 999;
       const status: RosterPerson["status"] = hasBlocked ? "blocked" : hasToday ? "active" : "quiet";
+      // Last 7 working days (skips Sat/Sun) - the team doesn't work
+      // weekends, so counting them would show as misleading "blank" cells
+      // next to real missed weekdays instead of just not being there.
       const heatmap: { day: string; count: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const key = dayKey(d.toISOString());
-        heatmap.push({ day: key, count: activityCountOnDay(activityIndex, userId, key) });
+      const cursor = new Date(today);
+      while (heatmap.length < 7) {
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) {
+          const key = dayKey(cursor.toISOString());
+          heatmap.unshift({ day: key, count: activityCountOnDay(activityIndex, userId, key) });
+        }
+        cursor.setDate(cursor.getDate() - 1);
       }
       out.push({
         userId,
@@ -1423,7 +1429,7 @@ function WorkLogPage() {
             className="w-auto! h-9! text-xs!"
           >
             <option value="">All people</option>
-            {profiles.map((p) => (
+            {activeProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ?? p.email}
               </option>

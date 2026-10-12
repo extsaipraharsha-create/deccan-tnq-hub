@@ -40,12 +40,19 @@ function ContributorsPage() {
       // convention used elsewhere for values ahead of the schema cache.
       supabase
         .from("user_roles")
-        .select("user_id,role")
+        .select("user_id,role,status")
         .in("role", ["tnq_team", "deccan_team", "super_admin"] as any),
     ]);
     const pmap = new Map(((p as Prof[]) ?? []).map((x) => [x.id, x]));
     setProfiles((p as Prof[]) ?? []);
-    setSmes(((ur as any[]) ?? []).map((x) => pmap.get(x.user_id)).filter(Boolean) as Prof[]);
+    // SME assignment picker: a suspended SME should drop out even though
+    // their role row still matches - only an active one can be assigned.
+    setSmes(
+      ((ur as any[]) ?? [])
+        .filter((x) => x.status === "active")
+        .map((x) => pmap.get(x.user_id))
+        .filter(Boolean) as Prof[],
+    );
     setRows(
       ((c as Row[]) ?? []).map((r) => ({
         ...r,

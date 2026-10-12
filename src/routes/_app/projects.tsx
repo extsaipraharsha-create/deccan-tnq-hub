@@ -100,6 +100,7 @@ function ProjectsPage() {
   const canWrite = role === "super_admin" || isTeamRole(role);
   const [items, setItems] = useState<Project[]>([]);
   const [smes, setSmes] = useState<SmeOption[]>([]);
+  const [activeSmeIds, setActiveSmeIds] = useState<Set<string>>(new Set());
   const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -118,15 +119,23 @@ function ProjectsPage() {
     setItems((data as any) ?? []);
     const { data: smeRoles } = await supabase
       .from("user_roles")
-      .select("user_id")
+      .select("user_id,status")
       .in("role", ["super_admin", "tnq_team", "deccan_team"] as any);
-    const ids = (smeRoles ?? []).map((r) => r.user_id).filter((id): id is string => id != null);
+    const roleRows = smeRoles ?? [];
+    const ids = roleRows.map((r) => r.user_id).filter((id): id is string => id != null);
+    setActiveSmeIds(
+      new Set(
+        roleRows.filter((r) => r.status === "active" && r.user_id).map((r) => r.user_id as string),
+      ),
+    );
     if (ids.length) {
       const { data: profs } = await supabase
         .from("profiles")
         .select("id,name,email,photo_url")
         .in("id", ids);
       setSmes((profs ?? []) as any);
+    } else {
+      setSmes([]);
     }
     const { data: co } = await (supabase as any).from("project_co_owners").select("*");
     setCoOwners((co as CoOwner[]) ?? []);
@@ -268,6 +277,20 @@ function ProjectsPage() {
   function toggleId(field: "current_owner_ids" | "previous_owner_ids", id: string) {
     const cur = (form[field] as string[] | undefined) ?? [];
     setForm({ ...form, [field]: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+  }
+
+  // Owner/SME pickers only offer active SMEs for NEW selections - a
+  // suspended or removed person shouldn't be assignable going forward.
+  // But if a field already points at someone who's since gone inactive,
+  // their option/chip still needs to render (pulled from the full `smes`
+  // list) so the field shows what's actually saved and can still be
+  // cleared, instead of silently looking empty.
+  const activeSmes = useMemo(() => smes.filter((s) => activeSmeIds.has(s.id)), [smes, activeSmeIds]);
+  function pickableSmes(selectedIds: string[]): SmeOption[] {
+    const stillSelected = smes.filter(
+      (s) => selectedIds.includes(s.id) && !activeSmeIds.has(s.id),
+    );
+    return [...activeSmes, ...stillSelected];
   }
 
   return (
@@ -543,7 +566,7 @@ function ProjectsPage() {
             onChange={(e) => setForm({ ...form, sme_owner_id: e.target.value || null })}
           >
             <option value="">— Unassigned —</option>
-            {smes.map((s) => (
+            {pickableSmes(form.sme_owner_id ? [form.sme_owner_id] : []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name ?? s.email}
               </option>
@@ -552,7 +575,7 @@ function ProjectsPage() {
         </Field>
         <Field label="Current Owner(s)">
           <div className="flex flex-wrap gap-1.5 p-2 border border-border rounded-lg max-h-32 overflow-y-auto">
-            {smes.map((s) => {
+            {pickableSmes(form.current_owner_ids ?? []).map((s) => {
               const sel = (form.current_owner_ids ?? []).includes(s.id);
               return (
                 <button
@@ -569,7 +592,7 @@ function ProjectsPage() {
         </Field>
         <Field label="Previous Owner(s)">
           <div className="flex flex-wrap gap-1.5 p-2 border border-border rounded-lg max-h-32 overflow-y-auto">
-            {smes.map((s) => {
+            {pickableSmes(form.previous_owner_ids ?? []).map((s) => {
               const sel = (form.previous_owner_ids ?? []).includes(s.id);
               return (
                 <button

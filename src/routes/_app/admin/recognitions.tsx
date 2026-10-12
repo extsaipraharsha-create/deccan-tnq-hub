@@ -7,6 +7,7 @@ import { ReactionBar, type Reaction } from "@/components/tnq/ReactionBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { Plus, Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,6 +54,7 @@ function RecognitionsPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [profiles, setProfiles] = useState<Prof[]>([]);
+  const activeProfiles = useActiveProfiles(profiles);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -86,10 +88,8 @@ function RecognitionsPage() {
   useEffect(() => {
     const ch = supabase
       .channel("recognitions-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "recognition_posts" },
-        () => load(),
+      .on("postgres_changes", { event: "*", schema: "public", table: "recognition_posts" }, () =>
+        load(),
       )
       .on(
         "postgres_changes",
@@ -114,7 +114,11 @@ function RecognitionsPage() {
   const recipientsFor = (postId: string) =>
     recipients.filter((r) => r.post_id === postId).map((r) => r.contributor_id);
   const reactionsFor = (postId: string) => reactions.filter((r) => r.post_id === postId);
-  const previewRecipients = deriveRecipients(message, profiles);
+  // Both the @mention autocomplete below and this preview parse should only
+  // ever resolve to someone still active - typing a removed person's name
+  // by hand shouldn't make them a recipient any more than picking them from
+  // the autocomplete would.
+  const previewRecipients = deriveRecipients(message, activeProfiles);
 
   async function post() {
     if (!message.trim()) {
@@ -135,9 +139,9 @@ function RecognitionsPage() {
       setPosting(false);
       return toast.error(error.message);
     }
-    const { error: recError } = await (supabase as any).from("recognition_recipients").insert(
-      previewRecipients.map((p) => ({ post_id: newPost.id, contributor_id: p.id })),
-    );
+    const { error: recError } = await (supabase as any)
+      .from("recognition_recipients")
+      .insert(previewRecipients.map((p) => ({ post_id: newPost.id, contributor_id: p.id })));
     if (recError) {
       setPosting(false);
       return toast.error(recError.message);
@@ -244,7 +248,7 @@ function RecognitionsPage() {
           <MentionTextarea
             value={message}
             onChange={(v) => setMessage(v.slice(0, 300))}
-            people={profiles}
+            people={activeProfiles}
             placeholder="e.g. Great work from @Sai Praharsha and @Siddhi Jain shipping the L2 pipeline early!"
             minHeight="min-h-24"
           />

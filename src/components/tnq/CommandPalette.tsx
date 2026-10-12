@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, FolderKanban, User, CornerDownLeft, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { NAV, ADMIN_SUB, type IconType } from "./Sidebar";
 import type { AppRole } from "@/lib/tnq/types";
 
@@ -84,6 +85,11 @@ export function CommandPalette() {
     return items;
   }, [role]);
 
+  // Navigation search shouldn't surface someone whose access was removed
+  // (role set to pending, suspended, or the user_roles row deleted) - they
+  // just drop out of this list, same as every other picker.
+  const activePeople = useActiveProfiles(people ?? []);
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     const projectItems: PaletteItem[] = (projects ?? []).map((p) => ({
@@ -94,7 +100,7 @@ export function CommandPalette() {
       icon: FolderKanban,
       to: `/projects/${p.id}`,
     }));
-    const peopleItems: PaletteItem[] = (people ?? []).map((p) => ({
+    const peopleItems: PaletteItem[] = activePeople.map((p) => ({
       id: `person-${p.id}`,
       label: p.name ?? p.email ?? "Unnamed",
       sublabel: p.email ?? undefined,
@@ -111,7 +117,7 @@ export function CommandPalette() {
         (it) => it.label.toLowerCase().includes(q) || (it.sublabel ?? "").toLowerCase().includes(q),
       )
       .slice(0, 20);
-  }, [query, pageItems, projects, people]);
+  }, [query, pageItems, projects, activePeople]);
 
   function select(item: PaletteItem) {
     setOpen(false);

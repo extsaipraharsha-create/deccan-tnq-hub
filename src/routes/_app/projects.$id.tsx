@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { isTeamRole } from "@/lib/tnq/types";
 import {
   Card,
@@ -134,6 +135,7 @@ function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [links, setLinks] = useState<ProjectLink[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const activeProfiles = useActiveProfiles(profiles);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<
     "overview" | "links" | "workspace" | "contributors" | "quality" | "activity"
@@ -1024,7 +1026,7 @@ function ProjectDetail() {
                 onChange={(e) => setAddCoOwner({ ...addCoOwner, userId: e.target.value })}
               >
                 <option value="">Select…</option>
-                {profiles
+                {activeProfiles
                   .filter((p) => !coOwners.some((co) => co.user_id === p.id))
                   .map((p) => (
                     <option key={p.id} value={p.id}>

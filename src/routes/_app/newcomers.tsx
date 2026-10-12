@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { isTeamRole } from "@/lib/tnq/types";
 import {
   PageHeader,
@@ -55,6 +56,7 @@ function NewcomersPage() {
   const canWrite = role === "super_admin" || isTeamRole(role);
   const [projects, setProjects] = useState<Project[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const activeProfiles = useActiveProfiles(profiles);
   const [resources, setResources] = useState<Resource[]>([]);
   const [tab, setTab] = useState<string>("all");
   const [open, setOpen] = useState(false);
@@ -304,7 +306,7 @@ function NewcomersPage() {
             onChange={(e) => setForm({ ...form, poc_user_id: e.target.value })}
           >
             <option value="">— Unassigned —</option>
-            {profiles.map((p) => (
+            {activeProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ?? p.email}
               </option>

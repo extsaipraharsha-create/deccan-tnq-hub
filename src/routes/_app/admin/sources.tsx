@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { Plus, Trash2, ExternalLink, FolderInput } from "lucide-react";
 
 interface Row {
@@ -40,6 +41,7 @@ function SourcesPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [projects, setProjects] = useState<Proj[]>([]);
   const [profiles, setProfiles] = useState<Prof[]>([]);
+  const activeProfiles = useActiveProfiles(profiles);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -188,7 +190,7 @@ function SourcesPage() {
             onChange={(e) => setForm({ ...form, contributor_id: e.target.value })}
           >
             <option value="">—</option>
-            {profiles.map((p) => (
+            {activeProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ?? p.email}
               </option>

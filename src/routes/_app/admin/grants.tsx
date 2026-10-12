@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/tnq/auth-context";
 import { useAutoRefresh } from "@/lib/tnq/use-auto-refresh";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { Plus, Trash2, KeyRound } from "lucide-react";
 
 interface Grant {
@@ -43,6 +44,7 @@ function GrantsPage() {
     permission: "view_only",
   });
   const loadedOnce = useRef(false);
+  const activeProfiles = useActiveProfiles(profiles);
 
   async function load() {
     if (!loadedOnce.current) setLoading(true);
@@ -131,7 +133,7 @@ function GrantsPage() {
             onChange={(e) => setForm({ ...form, user_id: e.target.value })}
           >
             <option value="">Select user…</option>
-            {profiles.map((p) => (
+            {activeProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ?? p.email}
               </option>

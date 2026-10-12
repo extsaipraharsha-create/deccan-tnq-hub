@@ -58,12 +58,16 @@ function TeamPage() {
   }, []);
   useAutoRefresh(load);
 
-  // SME = tnq_team, deccan_team, or super_admin
+  // SME = tnq_team, deccan_team, or super_admin, and currently active -
+  // this is a "who's on the team right now" roster, so a suspended or
+  // removed person shouldn't still show up as a current team member.
   const smes = useMemo(() => {
     const smeIds = new Set(
       roles
         .filter(
-          (r) => r.role === "super_admin" || r.role === "tnq_team" || r.role === "deccan_team",
+          (r) =>
+            (r.role === "super_admin" || r.role === "tnq_team" || r.role === "deccan_team") &&
+            r.status === "active",
         )
         .map((r) => r.user_id),
     );

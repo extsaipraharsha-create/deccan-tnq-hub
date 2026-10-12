@@ -1,10 +1,10 @@
-/* eslint-disable prettier/prettier */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PageHeader, Card, Button, EmptyState } from "@/components/tnq/ui";
 import { MentionTextarea } from "@/components/tnq/MentionTextarea";
 import { Confetti } from "@/components/tnq/Confetti";
 import { supabase } from "@/integrations/supabase/client";
+import { useActiveProfiles } from "@/lib/tnq/use-active-profiles";
 import { Megaphone, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ function AnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState(0);
+  const activePeople = useActiveProfiles(people);
 
   async function load() {
     setLoading(true);
@@ -70,7 +71,7 @@ function AnnouncementsPage() {
             <MentionTextarea
               value={text}
               onChange={setText}
-              people={people}
+              people={activePeople}
               placeholder="Write a short announcement, then Save to broadcast it. Type @ to mention someone."
               minHeight="min-h-35"
             />
